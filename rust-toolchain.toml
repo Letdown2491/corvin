@@ -1,0 +1,7 @@
+# Pin the Rust toolchain so release builds are reproducible: everyone building a
+# tagged release compiles with the exact same rustc. Bump deliberately (and note
+# it in the release, since the compiler version affects the output bytes).
+[toolchain]
+channel = "1.95.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

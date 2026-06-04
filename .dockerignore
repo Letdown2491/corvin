@@ -1,0 +1,16 @@
+# Keep the repro build context tiny and hermetic. The build needs only source +
+# lockfiles; host build artifacts must never enter the image (they bloat the COPY
+# — `target/` alone is tens of GB — and risk cargo reusing host-built objects
+# instead of compiling fresh, which would break reproducibility).
+#
+# The frontend's dist/ is rebuilt inside the container and copied from the frontend
+# stage, so the host copy is excluded too.
+
+/target
+/out
+/release
+.git
+**/node_modules
+frontend/dist
+frontend/.svelte-kit
+**/*.tmp

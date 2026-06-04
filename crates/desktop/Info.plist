@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- WKWebView kills the app on getUserMedia without these usage strings.
+         Camera is for QR scanning; microphone is never requested but the key
+         must be present because media-capture requests probe both. -->
+    <key>NSCameraUsageDescription</key>
+    <string>Corvin uses the camera to scan QR codes such as addresses and PSBTs.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Corvin does not record audio; this is only required for camera-based QR scanning.</string>
+</dict>
+</plist>

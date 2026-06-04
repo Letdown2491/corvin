@@ -1,0 +1,20 @@
+# Build artifacts
+/target
+/release
+/out
+crates/core/fuzz/target
+crates/core/fuzz/corpus
+crates/core/fuzz/artifacts
+frontend/dist
+frontend/node_modules
+frontend/.svelte-kit
+
+# Release signing — NEVER commit a minisign secret key. Only minisign.pub is
+# meant to be tracked.
+*.key
+minisign.key
+corvin-release.key
+*.minisig
+
+# Local config / scratch
+*.tmp

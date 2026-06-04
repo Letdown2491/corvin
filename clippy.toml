@@ -1,0 +1,4 @@
+# Tests use unwrap()/expect() freely; the unwrap_used ratchet (see
+# [workspace.lints] in Cargo.toml) only targets production code.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

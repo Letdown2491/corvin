@@ -1,0 +1,69 @@
+[package]
+name = "corvin-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# No "rusqlite" feature: wallet persistence is the at-rest-sealed ChangeSet blob
+# (crate::wallet_store), so SQLite/libsqlite3-sys (a C dependency) is not pulled in.
+bdk_wallet.workspace = true
+bdk_electrum.workspace = true
+bitcoin.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+
+# Bitcoin Core RPC
+bitcoincore-rpc = "0.19"
+
+# Hex encoding for RPC broadcast
+hex = "0.4"
+
+# Custom TLS for Electrum server SSL connections (CA cert + invalid-cert mode)
+native-tls = "0.2"
+
+# SOCKS5 proxy support (Tor)
+socks = "0.3"
+
+# BIP39 mnemonic generation and parsing
+bip39 = { version = "2", features = ["rand", "zeroize"] }
+
+# Zero out secret material on drop (seeds, mnemonics, passphrases)
+zeroize = "1"
+
+# At-rest encryption: Argon2id KDF + HKDF subkey separation + XChaCha20-Poly1305
+# file AEAD. All pure-Rust RustCrypto (no OpenSSL/C), one cipher for every
+# encrypted file + the wallet ChangeSet blob.
+argon2 = "0.5"
+hkdf = "0.12"
+sha2 = "0.10"
+chacha20poly1305 = { version = "0.10", features = ["getrandom"] }
+getrandom = "0.2"
+# Compact, self-describing serialization for the wallet ChangeSet blob (tolerant
+# of BDK schema evolution).
+ciborium = "0.2"
+bip322 = "0.0.10"
+silentpayments = { version = "0.5.0", default-features = false, features = ["encode", "receiving"] }
+
+# Optional: TypeScript binding generation. Enabled only by the `ts` feature
+# (and the `just gen-types` recipe), so the release binary never pulls it in.
+ts-rs = { workspace = true, optional = true }
+
+[features]
+# Generate TS bindings for the frontend from these types. See `just gen-types`.
+ts = ["dep:ts-rs"]
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+# `test-utils` exposes in-memory wallet funding helpers (insert_checkpoint,
+# receive_output_in_latest_block) used by the vault-spend tests.
+bdk_wallet = { workspace = true, features = ["test-utils"] }
+

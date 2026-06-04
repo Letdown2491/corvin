@@ -1,0 +1,39 @@
+# Udev rules for Corvin hardware-wallet support.
+#
+# Without these, non-root processes can't open the HID/USB devices and Corvin's
+# HW detection will fail with "permission denied" or simply not find the device.
+#
+# Install: copy to /lib/udev/rules.d/51-corvin.rules (or /etc/udev/rules.d/) and
+# reload with:
+#   sudo udevadm control --reload
+#   sudo udevadm trigger
+#
+# Then unplug and replug the device.
+#
+# The `plugdev` group is the common pattern on Debian/Ubuntu/Fedora; Start9's
+# OS uses a similar group. Adjust the GROUP=... if your distro differs.
+
+# ── BitBox02 ─────────────────────────────────────────────────────────────────
+# Shift Cryptosecurity / BitBox02 multi-edition + BTC-only edition
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="03eb", ATTRS{idProduct}=="2403", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# ── Ledger Nano S / S Plus / X / Stax / Flex ─────────────────────────────────
+# All Ledger products share VID 0x2c97; PID varies per model but the udev rule
+# applies to the whole vendor so we don't need to enumerate every PID here.
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="2c97", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# Older Nano S devices also enumerate under VID 0x2581
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="2581", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+# HID interface — same rule on the hidraw subsystem so hidapi can read/write
+KERNEL=="hidraw*", ATTRS{idVendor}=="2c97", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="2581", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# ── Trezor One / Model T / Safe 3 / Safe 5 ───────────────────────────────────
+# SatoshiLabs production VID 0x1209 + various PIDs, plus legacy VID 0x534c.
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="53c0", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="53c1", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="534c", ATTRS{idProduct}=="0001", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+
+# ── Blockstream Jade (placeholder, not yet supported) ───────────────────────
+# Jade enumerates as an FTDI CDC serial device. Left commented out until the
+# Jade integration ships (task #84).
+# SUBSYSTEMS=="usb", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE="0660", GROUP="plugdev", TAG+="uaccess"

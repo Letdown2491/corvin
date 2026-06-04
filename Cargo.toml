@@ -1,0 +1,53 @@
+[workspace]
+members = ["crates/core", "crates/server", "crates/desktop"]
+# cargo-fuzz crates have their own toolchain (nightly) + libfuzzer linkage; keep them
+# out of the normal workspace build.
+exclude = ["crates/core/fuzz"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# Ratchet: no bare unwrap() in production code. Use expect("why") to assert a
+# genuine invariant, or real error handling. Tests are exempt (clippy.toml).
+# Crates opt in with `[lints] workspace = true`.
+[workspace.lints.clippy]
+unwrap_used = "warn"
+
+[workspace.dependencies]
+# Bitcoin / BDK
+bdk_wallet = "3"
+bdk_electrum = "0.23"
+bitcoin = "0.32"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# Web
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors"] }
+
+# Serialization
+# `rc` lets serde serialize Arc<T> transparently — used by wallet snapshots.
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+toml = "0.8"
+# TypeScript binding generation from the core types (feature-gated; not built
+# into the release binary). Honors the serde rename_all on our enums.
+ts-rs = { version = "12", features = ["chrono-impl", "uuid-impl", "no-serde-warnings"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Utils
+uuid = { version = "1", features = ["v4", "serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Hardware wallets
+bitbox-api = { version = "0.12", features = ["tokio", "usb"] }

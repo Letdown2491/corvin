@@ -1,0 +1,58 @@
+# Reproducibly builds the headless Linux binary for a tagged release (via
+# Dockerfile.repro) and publishes its SHA256, so anyone can compare three
+# independently-produced hashes and confirm they match:
+#   - this CI run (GitHub's runner),
+#   - a user's own `just repro`,
+#   - the maintainer's signed SHA256SUMS in the release.
+#
+# Signing is intentionally NOT done here: the minisign secret key stays offline.
+# The maintainer runs `just release && just release-sign` locally and uploads
+# SHA256SUMS(.minisig) (see docs/releases.md). This job is the independent
+# "the pinned build is reproducible and here's the hash" check.
+#
+# Dormant until the repo is pushed to GitHub; safe to keep in-tree.
+name: release-build
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  repro-build-linux:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILDKIT: "1"
+    steps:
+      # Need the commit object so the build can pin SOURCE_DATE_EPOCH to its time.
+      - uses: actions/checkout@v4
+
+      # Build the binary in the pinned container (node + rust images, locked deps,
+      # SOURCE_DATE_EPOCH, path remap, normalized dist mtimes). Docker is
+      # preinstalled on ubuntu-latest. Produces out/corvin and prints its hash.
+      - name: Reproducible build
+        run: scripts/repro-build.sh
+
+      - name: Stage + hash
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          out="corvin-${version}-linux-x86_64"
+          cp out/corvin "$out"
+          sha256sum "$out" | tee SHA256SUMS
+          {
+            echo "### Reproducible build: \`$out\`"
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+            echo "Reproduce it yourself with \`just repro\` and compare, then check"
+            echo "both against the signed \`SHA256SUMS\` in the release."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corvin-linux-x86_64
+          path: |
+            corvin-*-linux-x86_64
+            SHA256SUMS
