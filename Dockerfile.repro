@@ -10,9 +10,9 @@
 #   docker build -f Dockerfile.repro --build-arg SOURCE_DATE_EPOCH=$(git -c log.showSignature=false log -1 --format=%ct) -o out .
 #   sha256sum out/corvin
 #
-# STRICT reproducibility note: pin the two base images by @sha256:<digest> (not
-# just the tag) and record the digests in docs/releases.md for a release. Tags can
-# be re-pointed upstream; digests can't. Left as tags here so it builds today.
+# STRICT reproducibility: the two base images are pinned by @sha256:<digest> below
+# (tags can be re-pointed upstream; digests can't). Record these digests in
+# docs/releases.md per release. Bump a digest only to one you've `podman pull`ed.
 
 # Fixed constant used only to normalize the embedded frontend mtimes. The value is
 # arbitrary; it just has to be identical for everyone building this source. Passed by
@@ -20,11 +20,10 @@
 ARG SOURCE_DATE_EPOCH=1735689600
 
 # ── Stage 1: deterministic frontend (dist/ is embedded into the binary) ──────
-# Pinned, hermetic Node — independent of whatever Node is on the build host. Any
-# pinned-and-real tag is equally reproducible; 22.12.0 is confirmed to pull. (A
-# newer 22.x would silence the harmless EBADENGINE dev-dep warnings, but only bump
-# to a tag you've verified with `podman pull`; ideally pin by @sha256.)
-FROM node:22.12.0-bookworm-slim AS frontend
+# Pinned, hermetic Node — independent of whatever Node is on the build host, locked
+# by @sha256 digest below. (Bump only to a digest you've `podman pull`ed; a newer
+# 22.x also silences the harmless EBADENGINE dev-dep warnings.)
+FROM node:22.12.0-bookworm-slim@sha256:35531c52ce27b6575d69755c73e65d4468dba93a25644eed56dc12879cae9213 AS frontend
 WORKDIR /b/frontend
 # Install strictly from the lockfile (no resolution drift), then build.
 COPY frontend/package.json frontend/package-lock.json ./
@@ -38,7 +37,7 @@ ARG SOURCE_DATE_EPOCH
 RUN find dist -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
 
 # ── Stage 2: deterministic Rust build ────────────────────────────────────────
-FROM rust:1.95.0-slim-bookworm AS build
+FROM rust:1.95.0-slim-bookworm@sha256:d7482085ff5b415f84dba5647ae71606650bdef00db7aeb69f4b3d170c3e4082 AS build
 ARG SOURCE_DATE_EPOCH
 ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} \
     CARGO_HOME=/b/.cargo \

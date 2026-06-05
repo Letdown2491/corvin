@@ -139,7 +139,7 @@ packaging tools, so:
   `_app/immutable/*.js` with mismatched hashes** — a stale page is referencing
   chunks a rebuild deleted. The service worker is now network-first and the
   server sends `Cache-Control: no-store`, but to clear an already-installed old
-  worker: stop the app, `rm -rf ~/.local/share/dev.corvin.app` (webview cache /
+  worker: stop the app, `rm -rf ~/.local/share/dev.corvin.wallet` (webview cache /
   SW / localStorage only — wallets live in `~/.config/corvin/`), relaunch.
   Always reload/restart after a frontend rebuild.
 - **A modal opens but is a ~2px sliver** — WebKitGTK collapses an auto-height

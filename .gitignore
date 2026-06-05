@@ -18,3 +18,10 @@ corvin-release.key
 
 # Local config / scratch
 *.tmp
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

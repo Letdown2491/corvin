@@ -4,22 +4,22 @@ Corvin publishes a `SHA256SUMS` manifest with each release plus a detached
 [minisign](https://jedisct1.github.io/minisign/) signature over it. That lets you
 verify two things about anything you download:
 
-- **Integrity** — the bytes weren't corrupted or tampered with in transit
-  (the SHA-256 hashes match).
-- **Origin** — the manifest was signed by the Corvin release key, not an
-  impostor (the minisign signature checks out).
+- **Integrity**: the bytes weren't corrupted or tampered with in transit (the SHA-256
+  hashes match).
+- **Origin**: the manifest was signed by the Corvin release key, not an impostor (the
+  minisign signature checks out).
 
 This is Phase 1 of `docs/reproducible-builds.md`. It does not yet prove the binary
-was built from this exact source (that's bit-for-bit reproducibility, a later
-phase) — but it's the baseline every money wallet needs, and what a reproducibility
-checker compares against.
+was built from this exact source (that's bit-for-bit reproducibility, a later phase),
+but it's the baseline every money wallet needs, and what a reproducibility checker
+compares against.
 
 ## Verifying a release (users)
 
 You need: the artifact(s) you downloaded, `SHA256SUMS`, `SHA256SUMS.minisig`, and
 the Corvin public key `minisign.pub` (committed at the repo root and pinned in the
-release notes). Install minisign (`apt install minisign`, `brew install minisign`,
-`pacman -S minisign`, …), then:
+release notes). Install minisign (`apt install minisign`, `brew install minisign`, or
+`pacman -S minisign`), then:
 
 ```sh
 # From the folder holding your downloads:
@@ -37,7 +37,7 @@ A valid run prints `Signature and comment signature verified` (from minisign) an
 an `OK` line per artifact. **If either step fails, do not run the binary.**
 
 > Trust is rooted in the public key. Get `minisign.pub` from a source you trust
-> (the repo over HTTPS, the pinned value in release notes) — verifying a download
+> (the repo over HTTPS, or the pinned value in release notes); verifying a download
 > against a key the same attacker could swap proves nothing.
 
 ## Cutting a release (maintainers)
@@ -59,8 +59,11 @@ means rotating to a new key (and telling users).
 ```sh
 just release          # reproducibly builds the headless Linux binary in the pinned
                       # container (Dockerfile.repro) and stages it under release/ as
-                      # corvin-<version>-linux-<arch>. Needs docker/podman.
-just release-sign     # writes release/SHA256SUMS + SHA256SUMS.minisig
+                      # corvin-headless-<version>-linux-<arch>. Needs docker/podman.
+just release-desktop  # (optional) host-builds the Linux desktop installers
+                      # (.deb + .rpm) and stages them in release/. Needs the Tauri CLI.
+                      # NOT reproducible; signed for authenticity only.
+just release-sign     # writes release/SHA256SUMS + SHA256SUMS.minisig over everything
 ```
 
 `just release` builds through the same pinned container as `just repro` and CI, so the
@@ -69,22 +72,48 @@ and confirm the hash matches the signed `SHA256SUMS`, and CI publishes the same 
 independently. (It always produces a Linux binary; for a quick host build use `just
 build`.)
 
+**Desktop installers** are per-OS, since Tauri can't cross-compile them. `just
+release-desktop` builds Linux `.deb` + `.rpm` on the host. AppImage is not shipped. The
+macOS `.dmg` and Windows `.msi` must be built on those OSes (a CI matrix), and all such
+files dropped into `release/` *before* signing. They are minisign-signed for authenticity
+but are **not** bit-for-bit reproducible, and OS-level code signing / notarization
+(Apple/Windows certs) is a separate, optional layer that removes Gatekeeper/SmartScreen
+warnings.
+
 `just release-sign` reads the secret key from `MINISIGN_SECRET_KEY` (or
-`~/.minisign/corvin-release.key`). Add any other artifacts (desktop bundles built
-on their own platforms) to `release/` *before* signing so they're covered by the
-same manifest — `sign-release.sh` hashes every file in the directory.
+`~/.minisign/corvin-release.key`) and hashes **every file** in `release/`, so stage all
+artifacts (headless binary + every desktop installer) there before signing.
 
 Publish `release/*` (artifacts + `SHA256SUMS` + `SHA256SUMS.minisig`) as the
 release assets, and include the `minisign.pub` value in the release notes.
+
+### The release body
+
+The GitHub release body is the version's `CHANGELOG.md` section plus a short
+downloads-and-verification block. Reusable template (replace `<ver>`):
+
+> First public release candidate. Pre-release: test with small amounts and keep your
+> seed backed up. See the changelog for the full feature list.
+>
+> | Asset | For |
+> |---|---|
+> | `corvin-headless-<ver>-linux-x86_64` | Headless server binary (self-host / CLI). The reproducible build. |
+> | `corvin-desktop_<ver>_amd64.deb` | Desktop app (GUI): Debian / Ubuntu |
+> | `corvin-desktop-<ver>-1.x86_64.rpm` | Desktop app (GUI): Fedora / RHEL / openSUSE |
+> | `SHA256SUMS` · `SHA256SUMS.minisig` · `minisign.pub` | Checksums + signature |
+>
+> Verify (minisign key ID `534BC9B81861C67F`):
+> `minisign -Vm SHA256SUMS -p minisign.pub && sha256sum -c SHA256SUMS`. Details above.
 
 ### Notes
 
 - The toolchain is pinned in `rust-toolchain.toml`; bump it deliberately and call
   out the change in the release, since the compiler version affects the bytes.
-- Builds use `--locked`, so `Cargo.lock` is authoritative. (Heads up: the dev
-  sandbox can rewrite `Cargo.lock` with bogus `.100` crate versions — never
-  release from a lockfile in that state. See the `cargo-update-proxy-100-artifact`
-  note.)
+- Builds use `--locked`, so `Cargo.lock` is authoritative; release only from a
+  lockfile you've reviewed (`git diff Cargo.lock`) and built/tested from.
+- Note: rust-bitcoin's `.100` patch versions (`bitcoin 0.32.100`,
+  `bitcoin_hashes 0.14.100`) are **real** crates.io releases (a coordinated
+  stable-maintenance bump), not artifacts; do not "revert" them out of the lock.
 - Desktop installer **signing/notarization** (macOS Gatekeeper, Windows
-  SmartScreen) is Phase 2 and needs paid developer certs — see
+  SmartScreen) is Phase 2 and needs paid developer certs; see
   `docs/reproducible-builds.md`.

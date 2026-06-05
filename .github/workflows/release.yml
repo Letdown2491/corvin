@@ -19,6 +19,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: write   # needed to create the draft GitHub Release on a tag
+
 jobs:
   repro-build-linux:
     runs-on: ubuntu-latest
@@ -35,12 +38,18 @@ jobs:
         run: scripts/repro-build.sh
 
       - name: Stage + hash
+        id: stage
         run: |
           set -euo pipefail
           version=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
-          out="corvin-${version}-linux-x86_64"
+          out="corvin-headless-${version}-linux-x86_64"
           cp out/corvin "$out"
           sha256sum "$out" | tee SHA256SUMS
+          {
+            echo "sha<<EOF"
+            cat SHA256SUMS
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
           {
             echo "### Reproducible build: \`$out\`"
             echo '```'
@@ -56,3 +65,27 @@ jobs:
           path: |
             corvin-*-linux-x86_64
             SHA256SUMS
+
+      # On a tag, open a DRAFT release with the reproducible binary + the CI hash in
+      # the body. Signing stays offline: the maintainer uploads the signed
+      # SHA256SUMS/.minisig + desktop installers + minisign.pub, then publishes.
+      - name: Draft release (maintainer finalizes + publishes)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: ${{ github.ref_name }}
+          files: corvin-*-linux-x86_64
+          body: |
+            > **Draft** — finalized by the maintainer with offline-signed artifacts. Do not publish as-is.
+
+            Independent reproducible-build hash from CI (compare against the signed `SHA256SUMS`):
+
+            ```
+            ${{ steps.stage.outputs.sha }}
+            ```
+
+            **To finalize:** run `just release && just release-desktop && just release-sign`
+            locally, then upload `release/*` (signed `SHA256SUMS` + `SHA256SUMS.minisig` +
+            the `.deb`/`.rpm`) and `minisign.pub` here, paste the matching
+            `docs/release-notes-*.md`, and publish. See `docs/releases.md`.

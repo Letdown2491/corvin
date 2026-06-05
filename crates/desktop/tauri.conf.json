@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Corvin",
-  "version": "0.1.0",
-  "identifier": "dev.corvin.app",
+  "version": "1.0.0-rc1",
+  "identifier": "dev.corvin.wallet",
   "build": {
     "frontendDist": "./splash"
   },

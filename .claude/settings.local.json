@@ -397,7 +397,32 @@
       "Bash(cat node_modules/@start9labs/start-sdk/base/lib/osBindings/Metadata.d.ts)",
       "Bash(ls -la corvin_x86_64.s9pk)",
       "Bash(rsync -a --delete --exclude target/ --exclude node_modules/ --exclude frontend/dist/ --exclude .git/ ~/Documents/corvin/ ~/Documents/corvin-startos/corvin/)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(node -e ' *)",
+      "Bash(sed 's|.*/||')",
+      "Bash(cp 128x128.png /tmp/desk128_view.png)",
+      "Bash(magick identify *)",
+      "Bash(echo \"desktop 32x32 in copy: $\\(magick identify -format '%[channels]' ~/Documents/corvin-startos/corvin/crates/desktop/icons/32x32.png\\)\")",
+      "Bash(just --list)",
+      "Bash(dpkg-deb -c release/Corvin_1.0.0-rc_amd64.deb)",
+      "Bash(echo \"copy bitcoin: $\\(grep -A1 '^name = \\\\\"bitcoin\\\\\"$' ~/Documents/corvin-startos/corvin/Cargo.lock)",
+      "Bash(sed -n '70,73p' README.md)",
+      "Bash(sed -n '524,531p' CLAUDE.md)",
+      "Bash(sed -n '33,42p' justfile)",
+      "Bash(sed -n '71,77p' justfile)",
+      "Bash(sed -n '74,80p' docs/releases.md)",
+      "Bash(sed -i 's#installers \\(.deb/.rpm/.AppImage / .dmg / .msi\\)#installers \\(.deb/.rpm / .dmg / .msi\\)#' README.md)",
+      "Bash(sed -i 's#\\(.dmg / .msi / AppImage / deb/rpm\\)#\\(.dmg / .msi / deb/rpm\\)#' docs/reproducible-builds.md)",
+      "Bash(sed -i '/\\\\*\\\\*AppImage:\\\\*\\\\* /d' docs/reproducible-builds.md)",
+      "Bash(sed -n '527,534p' CLAUDE.md)",
+      "Bash(sed -n '620,625p' CLAUDE.md)",
+      "Bash(sed -i 's#docs/audit-2026-05-31\\\\.md#docs/audits.md#g; s#the 2026-05-31 audit#the 2026-05-31 review pass#' docs/frontend-testing.md)",
+      "Bash(sed -i 's#docs/audit-2026-06-03\\\\.md#docs/audits.md#g' docs/at-rest-encryption.md)",
+      "Bash(sed -i 's/`tsp1…`/`tsp1`/g' docs/verification-plan.md)",
+      "Bash(sed -i 's/a `bitcoin:…?pj=…` v2/a v2 `bitcoin:` URI with a `pj=`/' docs/verification-plan.md)",
+      "Bash(mv docs/verification-plan.md ~/Documents/corvin-verification-plan.md)",
+      "Bash(sed -i 's# \\(see `verification-plan\\\\.md`\\)##' docs/per-wallet-backend.md docs/audits.md)",
+      "Bash(sed -i 's#Functional/security verification lives in `verification-plan\\\\.md`;#Functional/security verification is a separate pass;#' docs/ux-testing-guide.md)"
     ]
   }
 }

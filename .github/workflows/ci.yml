@@ -1,0 +1,59 @@
+# Lint + test on every push/PR. The TS-bindings drift guard here is what would have
+# caught the stale generated type; clippy runs both feature configs (default = hw/USB,
+# and --no-default-features = the headless build Start9 ships) since both must stay green.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Installs the toolchain pinned in rust-toolchain.toml (1.95.0 + clippy).
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      # The hw feature links libusb/hidapi → needs libudev at build time.
+      - name: System deps (hw feature)
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The server crate embeds frontend/dist via rust_embed, so build it first.
+      - name: Build frontend
+        run: cd frontend && npm ci && npm run build
+      - name: clippy (default / hw features)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: clippy (headless / --no-default-features)
+        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+      - name: tests
+        run: cargo test --workspace
+      - name: TS bindings drift guard
+        run: |
+          tmp="$(mktemp -d)"
+          TS_RS_EXPORT_DIR="$tmp" cargo test -p corvin-core --features ts export_bindings >/dev/null
+          if ! diff -rq "$tmp" frontend/src/lib/generated >/dev/null; then
+            echo "::error::TS bindings are stale — run 'just gen-types' and commit the result."
+            diff -ru frontend/src/lib/generated "$tmp" || true
+            exit 1
+          fi
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: cd frontend && npm ci
+      - name: svelte-check
+        run: cd frontend && npm run check
+      - name: unit tests (vitest)
+        run: cd frontend && npm test

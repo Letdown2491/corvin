@@ -6,11 +6,11 @@ dev-backend:
 
 # Run frontend dev server with proxy to backend
 dev-frontend:
-    cd frontend && /usr/bin/npm run dev
+    cd frontend && npm run dev
 
 # Build the frontend
 build-frontend:
-    cd frontend && /usr/bin/npm install && /usr/bin/npm run build
+    cd frontend && npm install && npm run build
 
 # Build the release binary (frontend must be built first)
 build: build-frontend
@@ -31,13 +31,12 @@ build-desktop: build-frontend
     cargo build --release --package corvin-desktop
     @echo "Binary: target/release/corvin-desktop"
 
-# Bundle the desktop app into installers (.deb/.rpm/.AppImage on Linux, .dmg on
-# macOS, .msi/NSIS on Windows). Build the frontend first so it's embedded in the
-# release binary. Requires the platform's packaging tools (Linux: rpm-build /
-# dpkg / AppImage tooling). The Tauri CLI is found via tauri.conf.json in
-# crates/desktop. Use `tauri build --no-bundle` to compile the binary only.
+# Bundle the desktop app into Linux installers (.deb + .rpm). AppImage is intentionally
+# not built (its linuxdeploy tooling needs FUSE; we don't ship it). Build the frontend
+# first so it's embedded. Requires rpm-build / dpkg + the Tauri CLI. On macOS/Windows,
+# pass the platform's bundles explicitly (e.g. `tauri build --bundles dmg`).
 bundle-desktop: build-frontend
-    cd crates/desktop && tauri build
+    cd crates/desktop && tauri build --bundles deb,rpm
 
 # Run cargo check on all crates
 check:
@@ -60,15 +59,46 @@ release:
     scripts/repro-build.sh
     version=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
     arch=$(uname -m); [ "$arch" = "arm64" ] && arch=aarch64
-    out="release/corvin-${version}-linux-${arch}"
-    mkdir -p release
+    out="release/corvin-headless-${version}-linux-${arch}"
+    rm -rf release && mkdir -p release   # start fresh so stale/old-version artifacts never get signed
     cp out/corvin "$out"
     echo "Staged $out (reproducible container build)"
-    echo "Next: 'just release-sign' to write SHA256SUMS + SHA256SUMS.minisig."
+    echo "Next: optionally 'just release-desktop' (Linux installers), then 'just release-sign'."
+
+# Build the Linux desktop installers (.deb + .rpm) and stage them under release/ next to
+# the headless binary, so 'just release-sign' covers them in the same SHA256SUMS +
+# signature. AppImage is intentionally not shipped (needs FUSE tooling). HOST build (not
+# the reproducible container) — bundles aren't bit-for-bit reproducible; minisign still
+# proves authenticity. macOS (.dmg) / Windows (.msi) must be built on those OSes. Run
+# after 'just release'. Needs the Tauri CLI.
+release-desktop: build-frontend
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{justfile_directory()}}"
+    (cd crates/desktop && tauri build --bundles deb,rpm)
+    mkdir -p release
+    shopt -s nullglob
+    staged=0
+    for f in target/release/bundle/deb/*.deb target/release/bundle/rpm/*.rpm; do
+        # Rename the release asset Corvin* -> corvin-desktop* so the GitHub releases page
+        # clearly distinguishes the desktop installers from the headless binary. (The
+        # installed package/app identity is unchanged — only the download filename.)
+        dest="release/$(basename "$f" | sed 's/^Corvin/corvin-desktop/')"
+        cp "$f" "$dest" && echo "Staged $dest"
+        staged=$((staged + 1))
+    done
+    [ "$staged" -gt 0 ] || { echo "error: no .deb/.rpm under target/release/bundle/" >&2; exit 1; }
+    echo "Next: 'just release-sign'."
 
 # Hash + minisign-sign everything staged under release/ (needs the secret key).
+# Copies minisign.pub into release/ first, so the published set includes the public key
+# and 'just verify-release release' can find it without a manual copy.
 release-sign:
-    scripts/sign-release.sh "{{justfile_directory()}}/release"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{justfile_directory()}}"
+    cp minisign.pub release/
+    scripts/sign-release.sh release
 
 # Verify a staged/downloaded release (signature + hashes) via minisign.pub.
 verify-release dir=".":
@@ -103,3 +133,19 @@ check-types:
         diff -ru "{{justfile_directory()}}/frontend/src/lib/generated" "$tmp" || true
         exit 1
     fi
+
+# Bump the project version in every place it lives, then sync Cargo.lock.
+# Usage: just bump-version 1.0.0
+# NOTE: the StartOS package version is in the SEPARATE corvin-startos repo
+# (startos/versions/current.ts, format "<version>:0") — update it there too.
+bump-version version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{justfile_directory()}}"
+    v="{{version}}"
+    sed -i -E '0,/^version = "/ s/^version = "[^"]*"/version = "'"$v"'"/' Cargo.toml
+    sed -i '0,/"version":/ s/"version": "[^"]*"/"version": "'"$v"'"/' frontend/package.json
+    sed -i '0,/"version":/ s/"version": "[^"]*"/"version": "'"$v"'"/' crates/desktop/tauri.conf.json
+    cargo update --workspace --offline   # rewrite the workspace crates' versions in Cargo.lock (no registry hit)
+    echo "Bumped to $v: Cargo.toml, frontend/package.json, crates/desktop/tauri.conf.json, Cargo.lock"
+    echo "REMEMBER: bump corvin-startos startos/versions/current.ts to '$v:0'"
