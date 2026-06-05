@@ -20,9 +20,15 @@ jobs:
       # Installs the toolchain pinned in rust-toolchain.toml (1.95.0 + clippy).
       - run: rustup show
       - uses: Swatinem/rust-cache@v2
-      # The hw feature links libusb/hidapi → needs libudev at build time.
-      - name: System deps (hw feature)
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
+      # corvin-desktop pulls Tauri (webkit2gtk/glib), and the hw feature links
+      # libusb/hidapi (libudev). Install the full Linux stack so the whole workspace
+      # compiles (libgtk-3-dev provides the glib-2.0 pkg-config the build needs).
+      - name: System deps (Tauri desktop + hw feature)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev libxdo-dev libssl-dev libudev-dev pkg-config
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -31,8 +37,10 @@ jobs:
         run: cd frontend && npm ci && npm run build
       - name: clippy (default / hw features)
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: clippy (headless / --no-default-features)
-        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+      # Headless = the server + core with hw off (what Start9 ships). corvin-desktop
+      # always needs Tauri, so it isn't part of the no-default-features check.
+      - name: clippy (headless / --no-default-features; server + core)
+        run: cargo clippy -p corvin -p corvin-core --all-targets --no-default-features -- -D warnings
       - name: tests
         run: cargo test --workspace
       - name: TS bindings drift guard
