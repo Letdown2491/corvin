@@ -422,7 +422,12 @@
       "Bash(sed -i 's/a `bitcoin:…?pj=…` v2/a v2 `bitcoin:` URI with a `pj=`/' docs/verification-plan.md)",
       "Bash(mv docs/verification-plan.md ~/Documents/corvin-verification-plan.md)",
       "Bash(sed -i 's# \\(see `verification-plan\\\\.md`\\)##' docs/per-wallet-backend.md docs/audits.md)",
-      "Bash(sed -i 's#Functional/security verification lives in `verification-plan\\\\.md`;#Functional/security verification is a separate pass;#' docs/ux-testing-guide.md)"
+      "Bash(sed -i 's#Functional/security verification lives in `verification-plan\\\\.md`;#Functional/security verification is a separate pass;#' docs/ux-testing-guide.md)",
+      "Bash(sed 's#__TRACKED_VAR__/Documents/##')",
+      "Bash(node -e 'const{ExtendedVersion}=require\\(\"@start9labs/start-sdk\"\\);ExtendedVersion.parse\\(\"1.0.0-rc.1:0\"\\);console.log\\(\"1.0.0-rc.1:0 parses OK\"\\)')",
+      "Bash(sed -i \"s/version: '1\\\\.0\\\\.0-rc\\\\.1:0'/version: '1.0.0-rc.2:0'/\" startos/versions/current.ts)",
+      "Bash(sed -n '1,8p' CHANGELOG.md)",
+      "Bash(sed -n '1,7p' ~/Documents/corvin-startos/CHANGELOG.md)"
     ]
   }
 }

@@ -4,6 +4,10 @@ All notable changes to Corvin are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Changes for the next release (1.0.0-rc.2) accumulate here.
+
 ## [1.0.0-rc1] - 2026-06-04
 
 First public release candidate. Corvin is a self-hosted Bitcoin wallet that runs
