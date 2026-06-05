@@ -59,6 +59,21 @@ jobs:
             echo "both against the signed \`SHA256SUMS\` in the release."
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Certify reproducibility: build the same commit a second time and assert the
+      # hash is identical. Fails the job (so no release is drafted) if it ever drifts.
+      - name: Reproducibility self-check
+        run: |
+          set -euo pipefail
+          first=$(sha256sum out/corvin | awk '{print $1}')
+          scripts/repro-build.sh >/dev/null
+          second=$(sha256sum out/corvin | awk '{print $1}')
+          if [ "$first" != "$second" ]; then
+            echo "::error::Reproducibility self-check FAILED — two builds of the same commit differ ($first vs $second)"
+            exit 1
+          fi
+          echo "Reproducibility self-check passed: $first"
+          echo "Reproducibility self-check: two independent builds matched (\`$first\`)." >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         with:
           name: corvin-linux-x86_64
@@ -85,7 +100,8 @@ jobs:
             ${{ steps.stage.outputs.sha }}
             ```
 
-            **To finalize:** run `just release && just release-desktop && just release-sign`
-            locally, then upload `release/*` (signed `SHA256SUMS` + `SHA256SUMS.minisig` +
-            the `.deb`/`.rpm`) and `minisign.pub` here, paste the matching
-            `docs/release-notes-*.md`, and publish. See `docs/releases.md`.
+            **To finalize:** run `just release`, then `just fetch-desktop <desktop-build run id>`
+            (pulls the macOS/Windows/Linux bundles so they can be signed) — or `just release-desktop`
+            for Linux-only — then `just release-sign`. Upload `release/*` (signed `SHA256SUMS` +
+            `SHA256SUMS.minisig` + installers) and `minisign.pub` here, set the body to the
+            CHANGELOG section plus the release-body template in `docs/releases.md`, and publish.

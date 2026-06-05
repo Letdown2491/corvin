@@ -57,28 +57,30 @@ means rotating to a new key (and telling users).
 ### Per release
 
 ```sh
-just release          # reproducibly builds the headless Linux binary in the pinned
-                      # container (Dockerfile.repro) and stages it under release/ as
-                      # corvin-headless-<version>-linux-<arch>. Needs docker/podman.
-just release-desktop  # (optional) host-builds the Linux desktop installers
-                      # (.deb + .rpm) and stages them in release/. Needs the Tauri CLI.
-                      # NOT reproducible; signed for authenticity only.
-just release-sign     # writes release/SHA256SUMS + SHA256SUMS.minisig over everything
+just release                 # reproducibly builds the headless Linux binary in the pinned
+                             # container (Dockerfile.repro) and stages it under release/ as
+                             # corvin-headless-<version>-linux-<arch>. Needs docker/podman.
+just fetch-desktop <run-id>  # pulls the desktop bundles (Linux .deb/.rpm + macOS .dmg +
+                             # Windows .msi) built by the desktop-build CI run into release/.
+                             # Needs the gh CLI. (Linux-only alternative: just release-desktop.)
+just release-sign            # writes release/SHA256SUMS + SHA256SUMS.minisig over everything
 ```
 
 `just release` builds through the same pinned container as `just repro` and CI, so the
 signed binary **is** the reproducible one: a downloader can rebuild with `just repro`
 and confirm the hash matches the signed `SHA256SUMS`, and CI publishes the same hash
-independently. (It always produces a Linux binary; for a quick host build use `just
-build`.)
+independently. CI also builds the tagged commit **twice** and fails if the two hashes
+differ, so reproducibility is certified automatically on every release. (It always
+produces a Linux binary; for a quick host build use `just build`.)
 
-**Desktop installers** are per-OS, since Tauri can't cross-compile them. `just
-release-desktop` builds Linux `.deb` + `.rpm` on the host. AppImage is not shipped. The
-macOS `.dmg` and Windows `.msi` must be built on those OSes (a CI matrix), and all such
-files dropped into `release/` *before* signing. They are minisign-signed for authenticity
-but are **not** bit-for-bit reproducible, and OS-level code signing / notarization
-(Apple/Windows certs) is a separate, optional layer that removes Gatekeeper/SmartScreen
-warnings.
+**Desktop installers** are per-OS, since Tauri can't cross-compile them. The `desktop-build`
+CI workflow builds them all (Linux `.deb`/`.rpm`, macOS `.dmg`, Windows `.msi`) on a tag or
+manual dispatch; `just fetch-desktop <run-id>` downloads them into `release/` so they're
+folded into the signed `SHA256SUMS`. (For a Linux-only build with no CI, `just
+release-desktop` host-builds the `.deb`/`.rpm`.) AppImage is not shipped. Desktop bundles
+are minisign-signed for authenticity but are **not** bit-for-bit reproducible, and OS-level
+code signing / notarization (Apple/Windows certs) is a separate, optional layer that removes
+Gatekeeper/SmartScreen warnings.
 
 `just release-sign` reads the secret key from `MINISIGN_SECRET_KEY` (or
 `~/.minisign/corvin-release.key`) and hashes **every file** in `release/`, so stage all

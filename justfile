@@ -90,6 +90,30 @@ release-desktop: build-frontend
     [ "$staged" -gt 0 ] || { echo "error: no .deb/.rpm under target/release/bundle/" >&2; exit 1; }
     echo "Next: 'just release-sign'."
 
+# Download the desktop bundles built by the 'desktop-build' CI workflow into release/, so
+# they get folded into SHA256SUMS by 'just release-sign'. This is how macOS/Windows builds
+# (which can't be built on Linux) become part of the signed, verifiable release. Pulls all
+# platforms (deb/rpm/dmg/msi), so use this INSTEAD of 'release-desktop' for a cross-platform
+# release. Find the run id with 'gh run list --workflow=desktop-build'. Needs the gh CLI.
+fetch-desktop run-id:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{justfile_directory()}}"
+    command -v gh >/dev/null || { echo "error: GitHub CLI 'gh' not found (install it, then 'gh auth login')" >&2; exit 1; }
+    mkdir -p release
+    tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+    gh run download "{{run-id}}" --dir "$tmp"
+    shopt -s globstar nullglob
+    staged=0
+    for f in "$tmp"/**/*.deb "$tmp"/**/*.rpm "$tmp"/**/*.dmg "$tmp"/**/*.msi "$tmp"/**/*-setup.exe; do
+        # Same Corvin* -> corvin-desktop* asset rename as release-desktop (download name only).
+        dest="release/$(basename "$f" | sed 's/^Corvin/corvin-desktop/')"
+        cp "$f" "$dest" && echo "Staged $dest"
+        staged=$((staged + 1))
+    done
+    [ "$staged" -gt 0 ] || { echo "error: no desktop bundles found in run {{run-id}}" >&2; exit 1; }
+    echo "Next: 'just release-sign' to sign everything in release/."
+
 # Hash + minisign-sign everything staged under release/ (needs the secret key).
 # Copies minisign.pub into release/ first, so the published set includes the public key
 # and 'just verify-release release' can find it without a manual copy.
