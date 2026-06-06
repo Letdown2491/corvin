@@ -91,8 +91,17 @@
     return utxos.some(u => scriptType(u.address) !== first)
   })
 
+  // In consolidate mode, frozen coins are excluded from the whole view: you froze them
+  // to keep them out of transactions, so they aren't consolidation targets, and hiding
+  // them keeps the table, "select all", and totals consistent.
+  let baseUtxos = $derived(
+    consolidateMode
+      ? utxos.filter(u => !$frozenUtxos.has(utxoKey(u.txid, u.vout)))
+      : utxos,
+  )
+
   let sorted = $derived.by(() => {
-    const list = [...utxos]
+    const list = [...baseUtxos]
     if (sortCol === 'amount') {
       list.sort((a, b) => sortDir === 'desc'
         ? b.amount_sats - a.amount_sats
@@ -144,9 +153,9 @@
   })
 
   // ── Footer totals ─────────────────────────────────────────────────────────
-  let totalSats     = $derived(utxos.reduce((s, u) => s + u.amount_sats, 0))
+  let totalSats     = $derived(baseUtxos.reduce((s, u) => s + u.amount_sats, 0))
   let frozenSats    = $derived(
-    utxos.filter(u => $frozenUtxos.has(utxoKey(u.txid, u.vout)))
+    baseUtxos.filter(u => $frozenUtxos.has(utxoKey(u.txid, u.vout)))
          .reduce((s, u) => s + u.amount_sats, 0)
   )
   let spendableSats = $derived(totalSats - frozenSats)
@@ -272,12 +281,12 @@
 
   $effect(() => { if (!consolidateMode) selected = new Set() })
 
-  let selectedUtxos = $derived(utxos.filter(u => selected.has(utxoKey(u.txid, u.vout))))
+  let selectedUtxos = $derived(baseUtxos.filter(u => selected.has(utxoKey(u.txid, u.vout))))
   let selectedSats  = $derived(selectedUtxos.reduce((s, u) => s + u.amount_sats, 0))
-  let allSelected   = $derived(utxos.length > 0 && utxos.every(u => selected.has(utxoKey(u.txid, u.vout))))
+  let allSelected   = $derived(baseUtxos.length > 0 && baseUtxos.every(u => selected.has(utxoKey(u.txid, u.vout))))
 
   function toggleAll() {
-    selected = allSelected ? new Set() : new Set(utxos.map(u => utxoKey(u.txid, u.vout)))
+    selected = allSelected ? new Set() : new Set(baseUtxos.map(u => utxoKey(u.txid, u.vout)))
   }
 
   function toggleOne(outpoint: string) {
@@ -301,6 +310,23 @@
 
 {#if utxos.length === 0}
   <EmptyState icon="coins" compact title="No coins yet" description="Unspent outputs (your spendable coins) appear here once this wallet receives Bitcoin." />
+{:else if consolidateMode && baseUtxos.length < 2}
+  <!-- Entered consolidate but too few unfrozen coins to combine (frozen coins are
+       excluded). Show why + an exit, rather than an empty table with bare headers. -->
+  <EmptyState
+    icon="coins"
+    compact
+    title="Not enough coins to consolidate"
+    description={baseUtxos.length === 0
+      ? 'All your coins are frozen. Unfreeze some to consolidate them.'
+      : 'Only one coin is available to consolidate (the others are frozen). Consolidation needs at least two.'}
+  />
+  <div class="consolidate-bar">
+    <span class="bar-info">No coins available to consolidate</span>
+    <div class="bar-actions">
+      <button class="bar-cancel" onclick={onCancelConsolidate}>Cancel</button>
+    </div>
+  </div>
 {:else}
   {#if !consolidateMode && showNudge}
     <div class="nudge">
@@ -337,10 +363,8 @@
           </th>
         {/if}
         <th class="col-utxo">UTXO</th>
-        {#if !consolidateMode}
-          <th class="col-category">Category</th>
-          <th class="col-note">Note</th>
-        {/if}
+        <th class="col-category">Category</th>
+        <th class="col-note">Note</th>
         {#if mixedTypes}
           <th class="col-type">Type</th>
         {/if}
@@ -354,9 +378,7 @@
             Amount <span class="sort-icon" class:active={sortCol === 'amount'}>{sortIcon('amount')}</span>
           </button>
         </th>
-        {#if !consolidateMode}
-          <th class="col-actions"></th>
-        {/if}
+        {#if !consolidateMode}<th class="col-actions"></th>{/if}
       </tr>
     </thead>
 
@@ -494,34 +516,40 @@
           </td>
 
           <!-- Category + Note (desktop columns; hidden on mobile, shown inline above) -->
-          {#if !consolidateMode}
-            <td class="col-category">
+          <!-- Read-only in consolidate mode (the row is a click-to-select target, so
+               interactive controls would fight the selection click). -->
+          <td class="col-category">
+            {#if consolidateMode}
+              {#if catId}<CategoryChip categoryId={catId} />{/if}
+            {:else}
               <CategoryPicker current={catId} inherited={catInherited} onSelect={(id) => assignUtxoCategory(utxo.txid, utxo.vout, id)} />
-            </td>
-            <td class="col-note">
-              {#if editingOutpoint === outpoint}
-                <input
-                  class="label-input"
-                  type="text"
-                  bind:value={editValue}
-                  oninput={() => onLabelInput(outpoint)}
-                  onblur={commitLabel}
-                  onkeydown={(e) => e.key === 'Enter' && commitLabel()}
-                  placeholder="Add note…"
-                  use:focusAndSelect
-                />
-              {:else}
-                <button class="label-btn" class:has-label={!!label} onclick={() => startEdit(outpoint)}>
-                  {#if label}
-                    <span class="label-text">{label}</span>
-                    <span class="label-edit" aria-hidden="true">✎</span>
-                  {:else}
-                    <span class="label-empty">+ note</span>
-                  {/if}
-                </button>
-              {/if}
-            </td>
-          {/if}
+            {/if}
+          </td>
+          <td class="col-note">
+            {#if consolidateMode}
+              {#if label}<span class="label-text">{label}</span>{/if}
+            {:else if editingOutpoint === outpoint}
+              <input
+                class="label-input"
+                type="text"
+                bind:value={editValue}
+                oninput={() => onLabelInput(outpoint)}
+                onblur={commitLabel}
+                onkeydown={(e) => e.key === 'Enter' && commitLabel()}
+                placeholder="Add note…"
+                use:focusAndSelect
+              />
+            {:else}
+              <button class="label-btn" class:has-label={!!label} onclick={() => startEdit(outpoint)}>
+                {#if label}
+                  <span class="label-text">{label}</span>
+                  <span class="label-edit" aria-hidden="true">✎</span>
+                {:else}
+                  <span class="label-empty">+ note</span>
+                {/if}
+              </button>
+            {/if}
+          </td>
 
           <!-- Type (desktop only, mixed-type wallets only) -->
           {#if mixedTypes}
@@ -572,7 +600,7 @@
             <span class="total-label">{utxos.length} UTXO{utxos.length !== 1 ? 's' : ''}</span>
           {/if}
         </td>
-        {#if !consolidateMode}<td class="col-category"></td><td class="col-note"></td>{/if}
+        <td class="col-category"></td><td class="col-note"></td>
         {#if mixedTypes}<td class="col-type"></td>{/if}
         <td class="col-age"></td>
         <td class="col-amount">
@@ -581,7 +609,7 @@
             <span class="spendable">{formatAmount(spendableSats)} spendable</span>
           {/if}
         </td>
-        {#if !consolidateMode}<td></td>{/if}
+        {#if !consolidateMode}<td class="col-actions"></td>{/if}
       </tr>
     </tfoot>
   </table>

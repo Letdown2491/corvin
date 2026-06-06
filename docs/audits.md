@@ -96,7 +96,15 @@ The standout cluster was "a corrupt file leads to silent data loss." Fixed:
 A focused pass over the changes since rc.2 (Cloudflare DoH default + migration, per-wallet
 SP scanner status, the Electrum subscriber skipping SP wallets, the BitBox at-rest pairing
 fix, SP dust-attack detection, the SP idle-timeout handling), plus a systematic re-check of
-the at-rest boundary prompted by the BitBox finding. No material findings.
+the at-rest boundary prompted by the BitBox finding. One material finding (the annotation load-timing bug below).
+
+- **At-rest load timing (found after the sweep, fixed).** The boundary sweep confirmed every
+  store *reads and writes* through `read_private`/`write_private`, but missed a timing issue:
+  `Annotations::load()` runs in `AppState::new`, i.e. while the vault is still **locked** at
+  boot, so all annotations (tx/UTXO/address notes, categories, cost basis, frozen UTXOs) read
+  empty, and a later edit could overwrite the sealed files. Fixed by reloading annotations in
+  the post-unlock startup (`run_startup_after_unlock`), before any save. Lesson: at-rest
+  correctness is not just "does it use the sealed reader" but "does it read *after* unlock."
 
 - **At-rest boundary is clean.** Enumerated every raw filesystem read/write in the crates:
   each one is either the migration mechanism itself, the deliberately-plaintext `vault.json`

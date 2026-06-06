@@ -85,6 +85,13 @@ pub async fn build_consolidate_psbt(
         return Err(anyhow::anyhow!("select at least 2 UTXOs to consolidate").into());
     }
 
+    // Freeze is authoritative: a frozen coin is never a spend candidate, including here
+    // (the UI hides them, but reject server-side so the API can't bypass the freeze).
+    let frozen_set = state.annotations.frozen_utxos().await;
+    if let Some(f) = req.utxos.iter().find(|s| frozen_set.contains(*s)) {
+        return Err(anyhow::anyhow!("UTXO {f} is frozen — unfreeze it before consolidating").into());
+    }
+
     let network = network_from_config(&state).await;
     let managed = get_managed(&state, &id).await?;
 

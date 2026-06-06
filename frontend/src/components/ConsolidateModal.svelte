@@ -5,6 +5,7 @@
   import type { AddressInfo, ConsolidateResult, DecodedTx, MempoolBlock, UtxoRecord, WalletEntry } from '../lib/types'
   import { displayUnit, mempoolUrl, hwEnabled } from '../stores/settings'
   import { addToast } from '../stores/toasts'
+  import { utxoCategories, addressCategories, categoryById } from '../stores/categories'
   import QrSignFlow from './QrSignFlow.svelte'
   import Modal from './ui/Modal.svelte'
   import CopyButton from './ui/CopyButton.svelte'
@@ -298,6 +299,25 @@
   }
 
   let totalInputSats = $derived(utxos.reduce((s, u) => s + u.amount_sats, 0))
+
+  // A coin's effective category: its own override, else its receiving address's.
+  function effCat(u: UtxoRecord): string | null {
+    const own = $utxoCategories[utxoKey(u.txid, u.vout)]
+    if (own) return own
+    if (u.address) return $addressCategories[u.address] ?? null
+    return null
+  }
+  // Distinct categories among the selected coins. Consolidating across >1 links them
+  // on-chain — the leak categories exist to prevent — so warn (uncategorized coins
+  // don't count toward the mix).
+  let mixedCategories = $derived.by(() => {
+    const ids = new Set<string>()
+    for (const u of utxos) { const c = effCat(u); if (c) ids.add(c) }
+    return [...ids]
+  })
+  let mixedCategoryNames = $derived(
+    mixedCategories.map(id => $categoryById[id]?.name ?? 'Uncategorized').join(', ')
+  )
 </script>
 
 <Modal open onclose={onClose} title="Consolidate UTXOs" width="520px"
@@ -555,6 +575,15 @@
       </div>
     </section>
 
+    {#if txPhase === 'compose' && mixedCategories.length > 1}
+      <div class="warn-list" role="alert">
+        <div class="warn-item warn-warning">
+          <span class="warn-icon" aria-hidden="true">⚠</span>
+          <div>Mixing {mixedCategories.length} categories ({mixedCategoryNames}). Consolidating links these coins together on-chain.</div>
+        </div>
+      </div>
+    {/if}
+
     <!-- Phase-driven action footer. -->
     <div class="modal-footer">
       {#if qrOpen}
@@ -753,6 +782,20 @@
   .tx-broadcast-link:hover { text-decoration: underline; }
 
   /* Footer */
+  /* Mixed-category consolidation warning. Mirrors the send-flow warn-item style. */
+  .warn-list { margin: 4px 0 0; }
+  .warn-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 10px; border-radius: 5px;
+    border: 1px solid var(--border);
+    font-size: 0.78rem; line-height: 1.45;
+  }
+  .warn-item.warn-warning {
+    background: color-mix(in srgb, #e09c52 8%, var(--surface-2));
+    border-color: color-mix(in srgb, #e09c52 35%, var(--border));
+  }
+  .warn-icon { font-size: 0.95rem; line-height: 1.3; flex-shrink: 0; color: #e09c52; }
+
   .modal-footer {
     padding-top: 14px; margin-top: 4px;
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px;

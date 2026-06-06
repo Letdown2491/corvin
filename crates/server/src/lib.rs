@@ -177,6 +177,10 @@ pub(crate) async fn run_startup_after_unlock(app_state: &state::AppState) -> any
     *app_state.mempool_http.write().await = mempool_http;
     app_state.manager.write().await.network = network;
     *app_state.config.write().await = cfg;
+    // Annotations (labels, categories, frozen UTXOs, cost basis) loaded empty in
+    // AppState::new because the vault was still locked then. Re-read them now that it's
+    // unlocked, before any save can overwrite the sealed files with empty maps.
+    app_state.annotations.reload().await;
 
     let sub_rx = app_state
         .startup_rx

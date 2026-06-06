@@ -473,10 +473,14 @@
 
   $effect(() => {
     if ($lastSyncComplete?.id === wallet.id) {
+      // Refetch in place: loadData/loadAddresses replace their data atomically on
+      // arrival, so don't clear to [] first — that empties the view (a visible flash)
+      // and tears out a row you may be mid-edit on. Charts are refreshed explicitly
+      // since they're otherwise only lazy-loaded when the tab is opened.
       const gen = ++dataGen
       loadData(gen)
-      addresses = []; utxos = []; balanceHistory = []
       if (wallet.internal_descriptor) loadAddresses(gen)
+      if (tab === 'charts') loadBalanceHistory(gen)
     }
   })
 

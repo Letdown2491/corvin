@@ -34,6 +34,16 @@
   let newColor = $state(PALETTE[0])
   let busy = $state(false)
 
+  // Starter quick-adds: the common categories the user hasn't created yet. Kept until
+  // they've built up their own set (so categorizing the 2nd/3rd coin stays one click),
+  // then they fall away. Previously these vanished after the very first category, which
+  // made categorizing several coins with different categories tedious.
+  let remainingSuggestions = $derived(
+    $categoryDefs.length < SUGGESTIONS.length
+      ? SUGGESTIONS.filter(s => !$categoryDefs.some(c => c.name.toLowerCase() === s.name.toLowerCase()))
+      : [],
+  )
+
   // The dropdown is fixed-positioned (anchored to the trigger) so a table's
   // overflow can't clip it — the bug where the menu "didn't open" was really it
   // being clipped inside the scrolling table body.
@@ -148,10 +158,10 @@
           </button>
         </div>
       {:else}
-        {#if $categoryDefs.length === 0}
+        {#if remainingSuggestions.length > 0}
           <div class="cat-suggest-label">Suggestions</div>
           <div class="cat-suggest">
-            {#each SUGGESTIONS as s (s.name)}
+            {#each remainingSuggestions as s (s.name)}
               <button type="button" class="cat-suggest-btn" style="--cat: {s.color}" disabled={busy} onclick={() => quickAdd(s.name, s.color)}>
                 <span class="cat-dot" style="background: {s.color}"></span>{s.name}
               </button>

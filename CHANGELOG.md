@@ -7,12 +7,33 @@ All notable changes to Corvin are documented here. This project follows
 ## [Unreleased]
 
 ### Added
+- Consolidating UTXOs that span more than one coin category now shows a privacy warning
+  before you sign (consolidation links those inputs on-chain), matching the mixed-category
+  check the send flow already does. Only appears when there's an actual mix.
 - Silent Payments dust-attack detection: tiny outputs sent to your reusable SP address
   (below a 5000-sat threshold, configurable via `sp_dust_threshold_sats`) are flagged in
   the UTXO table with a "dust attack?" badge and can be frozen in one click, so they can't
   be spent and used to probe or link your wallet.
 
 ### Fixed
+- The UTXO, address, and charts views no longer flash empty (and reset what you were doing,
+  like a half-typed note) when a background sync completes. The refreshed data now swaps in
+  place instead of clearing the view to empty first.
+- With at-rest encryption enabled, annotations (transaction / UTXO / address notes,
+  categories, cost-basis overrides, and frozen-UTXO state) came up empty after a restart:
+  they were read while the vault was still locked, and a later edit could then overwrite
+  the sealed files on disk. They're now reloaded right after unlock, before any save can
+  run, so they persist across restarts (data not yet overwritten by an edit is recovered).
+- The UTXO table keeps its Category and Note columns visible (read-only) while
+  consolidating, so you can see what you're combining and avoid mixing categories. Frozen
+  coins are now excluded from the consolidation view entirely (you froze them to keep them
+  out of transactions, so they're no longer selectable consolidation inputs), enforced
+  server-side too. If too few unfrozen coins remain to consolidate, a clear message
+  replaces the empty table.
+- The category picker's starter suggestions vanished after you created your first
+  category, making it tedious to categorize more coins (you'd have to hand-create each).
+  It now keeps offering the common categories you haven't created yet until you've built
+  up your own set.
 - BIP-353 name resolution failed with "HTTP 505" over a SOCKS5/Tor proxy. The default
   DNS-over-HTTPS resolver (Quad9) is HTTP/2-only and rejects the HTTP/1.1 requests sent
   through a proxy. The default is now an HTTP/1.1-compatible resolver, and installs still

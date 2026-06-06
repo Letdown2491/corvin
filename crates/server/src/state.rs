@@ -341,6 +341,19 @@ impl Annotations {
         }
     }
 
+    /// Re-read every annotation file into memory. Used after at-rest unlock: the initial
+    /// `load()` in `AppState::new` ran while the vault was still locked and read nothing,
+    /// so without this the maps stay empty and a later save would overwrite the sealed
+    /// files on disk.
+    pub async fn reload(&self) {
+        *self.tx_labels.write().await = load_labels_sync().unwrap_or_default();
+        *self.cost_basis.write().await = load_cost_basis_sync().unwrap_or_default();
+        *self.utxo_labels.write().await = load_utxo_labels_sync().unwrap_or_default();
+        *self.address_labels.write().await = load_address_labels_sync().unwrap_or_default();
+        *self.frozen_utxos.write().await = load_frozen_utxos_sync().unwrap_or_default();
+        *self.categories.write().await = load_categories_sync().unwrap_or_default();
+    }
+
     // Reads return a clone — callers serve them as JSON or iterate without
     // holding the lock.
     pub async fn tx_labels(&self) -> HashMap<String, String> {
