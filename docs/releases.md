@@ -102,10 +102,15 @@ downloads-and-verification block. Reusable template (replace `<ver>`):
 > | `corvin-headless-<ver>-linux-x86_64` | Headless server binary (self-host / CLI). The reproducible build. |
 > | `corvin-desktop_<ver>_amd64.deb` | Desktop app (GUI): Debian / Ubuntu |
 > | `corvin-desktop-<ver>-1.x86_64.rpm` | Desktop app (GUI): Fedora / RHEL / openSUSE |
+> | `corvin-desktop_<ver>_aarch64.dmg` | Desktop app (GUI): macOS (Apple Silicon) |
+> | `corvin-desktop_<ver>_x64-setup.exe` | Desktop app (GUI): Windows |
 > | `SHA256SUMS` · `SHA256SUMS.minisig` · `minisign.pub` | Checksums + signature |
 >
 > Verify (minisign key ID `534BC9B81861C67F`):
-> `minisign -Vm SHA256SUMS -p minisign.pub && sha256sum -c SHA256SUMS`. Details above.
+> `minisign -Vm SHA256SUMS -p minisign.pub && sha256sum -c SHA256SUMS`. Full steps in the README.
+>
+> Desktop builds aren't OS-code-signed. **macOS:** if it says "damaged", run
+> `xattr -cr /Applications/Corvin.app`. **Windows:** SmartScreen → **More info → Run anyway**.
 
 ### Notes
 

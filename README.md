@@ -173,6 +173,22 @@ A valid signature plus matching hashes confirm the build is the maintainer's and
 was not tampered with. Full details, including the maintainer signing flow, are in
 [docs/releases.md](docs/releases.md).
 
+## Installing the desktop app
+
+The desktop builds are **not OS-code-signed** (Corvin doesn't buy Apple/Microsoft
+certs); authenticity comes from the minisign signature above instead. So the OS shows
+a warning on first launch:
+
+- **macOS:** if it says *"Corvin is damaged and should be moved to the Trash"*, that's
+  Gatekeeper on an un-notarized app, not a real problem. Clear the download quarantine
+  and open it:
+  ```sh
+  xattr -cr /Applications/Corvin.app
+  ```
+- **Windows:** on the SmartScreen prompt, click **More info → Run anyway**.
+
+Verifying the download with minisign (above) is the real integrity check.
+
 ## Roadmap
 
 - [x] First-run onboarding wizard
