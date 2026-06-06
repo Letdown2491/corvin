@@ -105,6 +105,12 @@ the at-rest boundary prompted by the BitBox finding. One material finding (the a
   empty, and a later edit could overwrite the sealed files. Fixed by reloading annotations in
   the post-unlock startup (`run_startup_after_unlock`), before any save. Lesson: at-rest
   correctness is not just "does it use the sealed reader" but "does it read *after* unlock."
+  A follow-up enumeration of every eager sealed read found the **price cache** had the same
+  flaw (also reloaded post-unlock now); everything else was verified correct: config uses
+  `Config::default()` while locked and reloads post-unlock, and the deferred stores (wallets,
+  SP outputs/keys, payjoin sessions, Ledger HMACs, BitBox pairing) only read inside
+  `start_services` / on-demand handlers, which run after unlock. No write path runs while
+  locked (the API is gated and background tasks are deferred).
 
 - **At-rest boundary is clean.** Enumerated every raw filesystem read/write in the crates:
   each one is either the migration mechanism itself, the deliberately-plaintext `vault.json`
@@ -125,6 +131,56 @@ the at-rest boundary prompted by the BitBox finding. One material finding (the a
   dust receipts grows `sp_outputs.json` unboundedly. The new dust detection surfaces and
   freezes such outputs but doesn't cap storage; this is inherent to scanning-based SP
   receive (Sparrow has the same shape) and predates rc.3.
+
+## 2026-06-06: workflow + lifecycle review (the axes the delta pass missed)
+
+Run after the rc.3 delta pass kept surfacing bugs it hadn't caught, the gap being that a
+tooling + diff review checks *mechanism*, not *behaviour over time*. Two targeted passes:
+frontend transient-state-vs-refresh, and backend load/save timing.
+
+- **Manual Sync button had the same clobber as the SSE path (fixed).** The SSE
+  sync-complete handler was fixed to stop clearing the UTXO/address/chart arrays to `[]`
+  before refetching (which flashed the view and reset an in-progress note edit), but the
+  *manual* `sync()` in `WalletDetail` had the identical clear-then-refetch. Now swaps in
+  place too. Classic "fixed one instance, missed the sibling."
+- **Verified clean (frontend):** label/category writes are optimistic (store update, no
+  refetch, no flash); note editing survives an atomic data swap (keyed `{#each}` keeps the
+  row, input, and focus); the send flow takes `utxos` as a prop and keeps coin-control
+  selection in component state, so a background sync doesn't disturb a compose; modals are
+  `{#if}`-gated (fresh per open); only `WalletDetail`/`+layout` react to sync; the 30s
+  poll / visibility / online refreshes all go through the atomic `loadData`.
+- **Verified clean (backend):** every annotation setter holds the write lock across the
+  modify *and* the save, so there's no lost-update window; eager sealed reads are all
+  handled (annotations + price cache reload post-unlock, config defaults-while-locked,
+  deferred stores read after unlock); the post-unlock reload runs before `start_services`,
+  so no background save can race it; no write path runs while locked.
+- **Lost-update race on shared JSON stores (fixed).** Stores not backed by an in-memory
+  locked map (SP outputs, payjoin index + seen-inputs, SP keys) did an unsynchronized
+  read-modify-write: `load()` the whole file, edit, `save()` it back, with no lock. Atomic
+  temp+rename prevents corruption but not last-writer-wins lost updates. Worst case was
+  `sp_outputs.json`, written by independent per-wallet scanner tasks, where two wallets
+  receiving at once could drop a discovered output and its `tweak_t_n` spend data. Each
+  store's mutators now hold a per-store `Mutex` across the load+modify+save. (Tell: the
+  payjoin module already had a `#[cfg(test)]` serializer for exactly this shared state, but
+  production was never serialized.) Continuing the sweep found the same class in
+  `put_settings` (settings.rs): it read `backends`/`default_backend`/`onboarding` via several
+  separate `read().await`s, then saved a merged config, so a concurrent `/backends` change in
+  the gap was clobbered. Restructured to build the HTTP clients first, then hold the config
+  write lock across the whole merge+save+swap, with the network/scanner side effects after.
+  (`set_onboarding` already held the lock and was the model.)
+- **Fee-rate poll rebuilt a transaction mid-sign (fixed).** `feeRates` is a background-polled
+  store, passed as a prop; a fee *preset* makes `effectiveFeeRate` reactive to it. The
+  build/preview effects in send, fee-bump, and consolidate cleared and rebuilt the PSBT on any
+  `effectiveFeeRate` change with no phase guard, so a poll landing during signing rebuilt the
+  PSBT and silently invalidated the signature (worst during the multi-second HW confirm). All
+  three share an identical `txPhase` derivation; the build effects now bail unless
+  `txPhase === 'compose'`, freezing the fee once signing begins.
+- **Tx-detail panel staleness (fixed).** An open transaction-detail panel showed the
+  `TxRecord` captured when it opened, so confirmation status didn't update live during a
+  background sync. (The whole panel is frozen at open, not just the header as first thought;
+  but a tx's structure never changes after broadcast, so confirmation-derived fields are the
+  only thing that drifts.) `selectedTx` is now re-resolved by txid after each refetch, so the
+  panel updates live; a tx that drops out (RBF-replaced) keeps its last-known view.
 
 ## Still open, by nature rather than as defects
 

@@ -390,6 +390,11 @@
     const _path = spendPath
     void _mnem; void _pass; void _sp; void _path;
 
+    // Freeze the build once signing begins: a background fee-rate poll (effectiveFeeRate
+    // tracks the polled feeRates) must not rebuild and silently invalidate a PSBT that is
+    // being or has been signed. Change the fee by cancelling back to compose.
+    if (txPhase !== 'compose') return
+
     if (previewTimer) clearTimeout(previewTimer)
     preview = null
     previewError = ''

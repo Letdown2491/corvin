@@ -16,14 +16,29 @@ All notable changes to Corvin are documented here. This project follows
   be spent and used to probe or link your wallet.
 
 ### Fixed
+- Sending, fee-bumping, and consolidating no longer rebuild the transaction when the network
+  fee rate refreshes in the background while you're signing. Previously a fee-rate poll
+  mid-sign (notably during the multi-second hardware-wallet confirmation) could rebuild the
+  PSBT and silently invalidate the signature. The fee is frozen once you start signing;
+  cancel back to compose to change it.
+- Fixed a lost-update race in several on-disk stores (Silent Payments outputs, the payjoin
+  session index and anti-replay seen-inputs set, SP keys, and the settings save). Concurrent
+  writers each loaded the current state, edited it, and saved, so one could silently
+  overwrite the other. The most consequential was SP outputs, where two wallets receiving at
+  the same time could drop a discovered output along with the data needed to spend it. Each
+  now serializes its read-modify-write (the settings save holds the config lock across the
+  whole merge, so a concurrent backend-registry change can't be clobbered).
 - The UTXO, address, and charts views no longer flash empty (and reset what you were doing,
-  like a half-typed note) when a background sync completes. The refreshed data now swaps in
-  place instead of clearing the view to empty first.
+  like a half-typed note) when a sync completes, whether it's a background sync or the manual
+  Sync button. The refreshed data now swaps in place instead of clearing the view first.
+- An open transaction-detail panel now updates live during a background sync (for example an
+  unconfirmed transaction flips to confirmed) instead of staying frozen until you reopen it.
 - With at-rest encryption enabled, annotations (transaction / UTXO / address notes,
-  categories, cost-basis overrides, and frozen-UTXO state) came up empty after a restart:
-  they were read while the vault was still locked, and a later edit could then overwrite
-  the sealed files on disk. They're now reloaded right after unlock, before any save can
-  run, so they persist across restarts (data not yet overwritten by an edit is recovered).
+  categories, cost-basis overrides, frozen-UTXO state) and the historical price cache came
+  up empty after a restart: they were read while the vault was still locked, and a later
+  write could then overwrite the sealed files on disk. They're now reloaded right after
+  unlock, before any save can run, so they persist across restarts (data not yet
+  overwritten by a write is recovered).
 - The UTXO table keeps its Category and Note columns visible (read-only) while
   consolidating, so you can see what you're combining and avoid mixing categories. Frozen
   coins are now excluded from the consolidation view entirely (you froze them to keep them

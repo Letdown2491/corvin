@@ -575,6 +575,13 @@ impl PriceCache {
         }
     }
 
+    /// Reload the persisted historical prices. Used after at-rest unlock: the initial
+    /// `load()` in `AppState::new` ran while the vault was still locked and read nothing,
+    /// so without this the next recorded price would overwrite the cache on disk.
+    pub async fn reload(&self) {
+        *self.historical.lock().await = load_price_cache_sync().unwrap_or_default();
+    }
+
     /// Cached historical price for a UTC day-start, if present.
     pub async fn historical(&self, day: i64) -> Option<f64> {
         self.historical.lock().await.get(&day).copied()

@@ -96,6 +96,11 @@ fn save(store: &Store) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Serialize the read-modify-write of the shared SP-key store file so concurrent
+/// writers (create / label-add / delete / restore) can't lose each other's updates.
+/// Held only across the (synchronous) load+modify+save, never across an await.
+static STORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Persist SP key material for `wallet_id`. Used by both the legacy
 /// enable-on-existing flow and the new SP-as-wallet-kind creation endpoint.
 pub fn store_keys(
@@ -107,6 +112,7 @@ pub fn store_keys(
     birthday_height: Option<u32>,
     account_index: Option<u32>,
 ) -> anyhow::Result<()> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut store = load();
     store.insert(
         wallet_id,
@@ -140,6 +146,7 @@ pub fn export_keys() -> Store {
 /// Overwrite the SP key store from a restored backup. Replaces the whole store
 /// (restore is a full replacement), then locks the file to the owner.
 pub fn import_keys(store: Store) -> anyhow::Result<()> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     save(&store)?;
     crate::state::restrict_to_owner(&store_path());
     Ok(())
@@ -148,6 +155,7 @@ pub fn import_keys(store: Store) -> anyhow::Result<()> {
 /// Public helper used by the wallet-delete handler to clean up stale SP
 /// keys when a wallet is removed.
 pub fn forget_wallet(wallet_id: Uuid) -> anyhow::Result<()> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut store = load();
     if store.remove(&wallet_id).is_some() {
         save(&store)?;
@@ -231,40 +239,46 @@ pub async fn add_silent_payment_label(
     }
     let network: Network = state.config.read().await.network.kind.to_bitcoin_network();
 
-    let mut store = load();
-    let keys = store
-        .get_mut(&id)
-        .ok_or_else(|| anyhow::anyhow!("not a Silent Payments wallet"))?;
+    // Lock held across the (synchronous) load+modify+save only — dropped before the
+    // async rescan below, so it never spans an await.
+    let label = {
+        let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut store = load();
+        let keys = store
+            .get_mut(&id)
+            .ok_or_else(|| anyhow::anyhow!("not a Silent Payments wallet"))?;
 
-    // m=0 is reserved for change; labels start at 1. Next = max existing + 1.
-    let next_m = keys
-        .labels
-        .iter()
-        .map(|l| l.m)
-        .max()
-        .map(|m| m + 1)
-        .unwrap_or(1);
+        // m=0 is reserved for change; labels start at 1. Next = max existing + 1.
+        let next_m = keys
+            .labels
+            .iter()
+            .map(|l| l.m)
+            .max()
+            .map(|m| m + 1)
+            .unwrap_or(1);
 
-    let scan_bytes = parse_hex_32(&keys.scan_secret_hex)
-        .ok_or_else(|| anyhow::anyhow!("stored scan secret is malformed"))?;
-    let spend_bytes = parse_hex_33(&keys.spend_pubkey_hex)
-        .ok_or_else(|| anyhow::anyhow!("stored spend pubkey is malformed"))?;
-    let address = corvin_core::silent_payments::labeled_address_from_stored(
-        &scan_bytes,
-        &spend_bytes,
-        network,
-        next_m,
-    )
-    .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let scan_bytes = parse_hex_32(&keys.scan_secret_hex)
+            .ok_or_else(|| anyhow::anyhow!("stored scan secret is malformed"))?;
+        let spend_bytes = parse_hex_33(&keys.spend_pubkey_hex)
+            .ok_or_else(|| anyhow::anyhow!("stored spend pubkey is malformed"))?;
+        let address = corvin_core::silent_payments::labeled_address_from_stored(
+            &scan_bytes,
+            &spend_bytes,
+            network,
+            next_m,
+        )
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    let label = SpLabel {
-        m: next_m,
-        name,
-        address,
+        let label = SpLabel {
+            m: next_m,
+            name,
+            address,
+        };
+        keys.labels.push(label.clone());
+        save(&store)?;
+        crate::state::restrict_to_owner(&store_path());
+        label
     };
-    keys.labels.push(label.clone());
-    save(&store)?;
-    crate::state::restrict_to_owner(&store_path());
 
     // Restart this wallet's scanner so it re-subscribes with the new label —
     // otherwise payments to the labeled address aren't detected until restart.

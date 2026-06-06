@@ -35,27 +35,9 @@ pub async fn put_settings(
 ) -> Result<Json<Config>, ApiError> {
     validate_config(&new_cfg)?;
 
-    // Preserve the stored password if the client sent an empty string.
-    if new_cfg.backend.rpc_pass.is_empty() {
-        new_cfg.backend.rpc_pass = state.config.read().await.backend.rpc_pass.clone();
-    }
-    let old_default = state.config.read().await.default_backend.clone();
-    let old_offline = state.config.read().await.offline;
-    // The settings form doesn't carry the backend registry, so don't let a save
-    // wipe it — keep whatever's already stored.
-    new_cfg.backends = state.config.read().await.backends.clone();
-    // Same for the onboarding flag — not carried by the settings form.
-    new_cfg.onboarding_complete = state.config.read().await.onboarding_complete;
-    // A default that points at a non-existent backend would silently fall back;
-    // normalize it to None so what's stored matches what's used.
-    if let Some(id) = &new_cfg.default_backend {
-        if new_cfg.backend_entry(id).is_none() {
-            new_cfg.default_backend = None;
-        }
-    }
-    // Build the HTTP client first so a bad proxy / TLS config is rejected before
-    // we persist anything — otherwise the user thinks Tor is on while we silently
-    // drop the proxy.
+    // Build the HTTP clients first so a bad proxy / TLS config is rejected before we
+    // persist anything (otherwise the user thinks Tor is on while we silently drop the
+    // proxy). Synchronous + fallible, so do it before taking the config lock.
     let new_http = build_http_client(
         new_cfg.backend.socks5_proxy.as_deref(),
         new_cfg.backend.danger_accept_invalid_certs,
@@ -64,11 +46,37 @@ pub async fn put_settings(
         new_cfg.backend.socks5_proxy.as_deref(),
         new_cfg.backend.mempool_danger_accept_invalid_certs,
     )?;
-    let default_changed = old_default != new_cfg.default_backend;
-    let offline_changed = old_offline != new_cfg.offline;
-    let now_offline = new_cfg.offline;
-    save_config(&new_cfg)?;
-    *state.config.write().await = new_cfg.clone();
+
+    // Merge the server-owned fields, persist, and swap the in-memory config all under a
+    // single write lock, so a concurrent config writer (e.g. /backends, onboarding)
+    // can't be clobbered by a stale read. Side effects run afterwards, unlocked.
+    let (default_changed, offline_changed, now_offline) = {
+        let mut cfg = state.config.write().await;
+        // Preserve the stored password if the client sent an empty string.
+        if new_cfg.backend.rpc_pass.is_empty() {
+            new_cfg.backend.rpc_pass = cfg.backend.rpc_pass.clone();
+        }
+        let old_default = cfg.default_backend.clone();
+        let old_offline = cfg.offline;
+        // The settings form carries neither the backend registry nor the onboarding
+        // flag, so keep whatever's already stored rather than wiping it.
+        new_cfg.backends = cfg.backends.clone();
+        new_cfg.onboarding_complete = cfg.onboarding_complete;
+        // A default that points at a non-existent backend would silently fall back;
+        // normalize it to None so what's stored matches what's used.
+        if let Some(id) = &new_cfg.default_backend {
+            if new_cfg.backend_entry(id).is_none() {
+                new_cfg.default_backend = None;
+            }
+        }
+        save_config(&new_cfg)?;
+        *cfg = new_cfg.clone();
+        (
+            old_default != new_cfg.default_backend,
+            old_offline != new_cfg.offline,
+            new_cfg.offline,
+        )
+    };
     *state.http.write().await = new_http;
     *state.mempool_http.write().await = new_mempool_http;
     // Changing the default re-homes every wallet that rides it onto the new

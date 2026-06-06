@@ -241,9 +241,11 @@
     try {
       await api.wallets.sync(wallet.id)
       if (gen !== dataGen) return
-      addresses = []; utxos = []; balanceHistory = []
+      // Swap in place (no clear-to-[]) so a manual sync doesn't flash the view empty or
+      // reset an in-progress edit, same as the SSE sync-complete path.
       await loadData(gen)
       if (wallet.internal_descriptor) await loadAddresses(gen)
+      if (tab === 'charts') await loadBalanceHistory(gen)
     } catch (e) {
       if (gen === dataGen) error = e instanceof Error ? e.message : 'Sync failed'
     } finally {
@@ -482,6 +484,16 @@
       if (wallet.internal_descriptor) loadAddresses(gen)
       if (tab === 'charts') loadBalanceHistory(gen)
     }
+  })
+
+  // Keep an open tx-detail panel pointed at the freshest record after a refetch, so an
+  // unconfirmed tx shows as confirmed live instead of only on reopen. If the tx has dropped
+  // (e.g. RBF-replaced), leave the last-known view rather than yanking the panel away.
+  $effect(() => {
+    const sel = selectedTx
+    if (!sel) return
+    const fresh = txs.find(t => t.txid === sel.txid)
+    if (fresh && fresh !== sel) selectedTx = fresh
   })
 
   $effect(() => {

@@ -80,11 +80,26 @@ fn save_index(index: &Index) -> Result<()> {
     Ok(())
 }
 
+/// Serialize the index read-modify-write so concurrent sessions can't lose each other's
+/// updates (each loads the whole file, edits, and saves: last-writer-wins). The closure
+/// returns whether anything changed, so a no-op skips the save.
+static INDEX_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn mutate_index(f: impl FnOnce(&mut Index) -> bool) -> Result<()> {
+    let _guard = INDEX_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut index = load_index();
+    if f(&mut index) {
+        save_index(&index)?;
+    }
+    Ok(())
+}
+
 /// Record a new session against its owning wallet.
 pub fn register(session_id: Uuid, meta: SessionMeta) -> Result<()> {
-    let mut index = load_index();
-    index.insert(session_id, meta);
-    save_index(&index)
+    mutate_index(|index| {
+        index.insert(session_id, meta);
+        true
+    })
 }
 
 pub fn get(session_id: Uuid) -> Option<SessionMeta> {
@@ -94,15 +109,16 @@ pub fn get(session_id: Uuid) -> Option<SessionMeta> {
 /// Update a session's app-level status (and optionally its broadcast txid).
 /// No-op if the session is unknown.
 pub fn set_status(session_id: Uuid, status: PjStatus, txid: Option<String>) -> Result<()> {
-    let mut index = load_index();
-    if let Some(meta) = index.get_mut(&session_id) {
+    mutate_index(|index| {
+        let Some(meta) = index.get_mut(&session_id) else {
+            return false;
+        };
         meta.status = status;
         if txid.is_some() {
             meta.result_txid = txid;
         }
-        save_index(&index)?;
-    }
-    Ok(())
+        true
+    })
 }
 
 pub fn list_for_wallet(wallet_id: Uuid) -> Vec<(Uuid, SessionMeta)> {
@@ -119,9 +135,10 @@ pub fn all_sessions() -> Vec<(Uuid, SessionMeta)> {
 
 /// Drop a session: remove its index entry and delete its event log.
 pub fn forget(session_id: Uuid) -> Result<()> {
-    let mut index = load_index();
-    index.remove(&session_id);
-    save_index(&index)?;
+    mutate_index(|index| {
+        index.remove(&session_id);
+        true
+    })?;
     let _ = std::fs::remove_file(log_path(session_id));
     Ok(())
 }
@@ -148,11 +165,16 @@ pub fn load_seen() -> std::collections::HashSet<String> {
     crate::state::load_or_quarantine(&seen_path())
 }
 
+/// Serialize the seen-set read-modify-write (concurrent receive sessions). A lost
+/// update here would weaken anti-replay, so it must not race.
+static SEEN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Record outpoints (formatted "txid:vout") as seen.
 pub fn mark_seen(outpoints: &[String]) -> Result<()> {
     if outpoints.is_empty() {
         return Ok(());
     }
+    let _guard = SEEN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut set = load_seen();
     set.extend(outpoints.iter().cloned());
     atomic_write(&seen_path(), &serde_json::to_vec_pretty(&set)?)?;

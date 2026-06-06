@@ -34,38 +34,51 @@ fn save(store: &Store) -> anyhow::Result<()> {
     crate::state::write_private(&path, &serde_json::to_vec_pretty(store)?)
 }
 
+/// Serialize the read-modify-write of the shared store file. Independent per-wallet
+/// scanner tasks would otherwise each load the whole file, edit their own bucket, and
+/// save, so one task's discovery could silently overwrite another's (last-writer-wins).
+/// The closure returns whether anything changed, so a no-op skips the save.
+static STORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn mutate(f: impl FnOnce(&mut Store) -> bool) -> anyhow::Result<()> {
+    let _guard = STORE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut store = load();
+    if f(&mut store) {
+        save(&store)?;
+    }
+    Ok(())
+}
+
 /// Append a newly-discovered output for `wallet_id`. Idempotent on
 /// (txid, vout) — a duplicate entry replaces the existing one rather than
 /// piling on.
 pub fn append(wallet_id: Uuid, record: SpOutputRecord) -> anyhow::Result<()> {
-    let mut store = load();
-    let bucket = store.entry(wallet_id).or_default();
-    bucket.retain(|r| !(r.txid == record.txid && r.vout == record.vout));
-    bucket.push(record);
-    save(&store)
+    mutate(|store| {
+        let bucket = store.entry(wallet_id).or_default();
+        bucket.retain(|r| !(r.txid == record.txid && r.vout == record.vout));
+        bucket.push(record);
+        true
+    })
 }
 
 /// Mark the given `(txid, vout)` outputs spent — called after an SP-spend tx is
 /// broadcast, since the scanner only ever *adds* outputs and never records
 /// spends itself.
 pub fn mark_spent(wallet_id: Uuid, outpoints: &[(String, u32)]) -> anyhow::Result<()> {
-    let mut store = load();
-    if let Some(bucket) = store.get_mut(&wallet_id) {
+    mutate(|store| {
+        let Some(bucket) = store.get_mut(&wallet_id) else {
+            return false;
+        };
         for r in bucket.iter_mut() {
             if outpoints.iter().any(|(t, v)| *t == r.txid && *v == r.vout) {
                 r.spent = true;
             }
         }
-        save(&store)?;
-    }
-    Ok(())
+        true
+    })
 }
 
 /// Drop every SP output for the wallet — called when an SP wallet is deleted.
 pub fn forget_wallet(wallet_id: Uuid) -> anyhow::Result<()> {
-    let mut store = load();
-    if store.remove(&wallet_id).is_some() {
-        save(&store)?;
-    }
-    Ok(())
+    mutate(|store| store.remove(&wallet_id).is_some())
 }

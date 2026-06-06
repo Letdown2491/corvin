@@ -126,6 +126,9 @@
     const dest = effectiveDestination
     const rate = effectiveFeeRate
 
+    // Freeze the build once signing begins: a background fee-rate poll must not rebuild
+    // (and silently invalidate) a PSBT that is being or has been signed.
+    if (txPhase !== 'compose') return
     if (previewTimer) clearTimeout(previewTimer)
     preview = null
     previewError = ''
