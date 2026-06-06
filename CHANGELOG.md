@@ -4,9 +4,19 @@ All notable changes to Corvin are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0-rc.2] - 2026-06-05
 
-Changes for the next release (1.0.0-rc.2) accumulate here.
+> **This is a pre-release.** Test with small amounts first and keep a secure backup
+> of your seed.
+
+### Added
+- macOS (`.dmg`) and Windows (`-setup.exe`) desktop installers, alongside the
+  existing Linux builds. All desktop downloads are signed (minisign) and covered by
+  the release `SHA256SUMS`.
+
+### Changed
+- Reproducible builds are now verified automatically in CI: the release binary is
+  built twice and must produce an identical hash.
 
 ## [1.0.0-rc1] - 2026-06-04
 
@@ -63,4 +73,5 @@ and self-custody.
   raw transactions or PSBTs, view balance-history charts, and back up and restore
   your entire set of wallets.
 
+[1.0.0-rc.2]: https://github.com/Letdown2491/corvin/releases/tag/v1.0.0-rc.2
 [1.0.0-rc1]: https://github.com/Letdown2491/corvin/releases/tag/v1.0.0-rc1

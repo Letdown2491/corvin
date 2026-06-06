@@ -5,12 +5,12 @@ helping keep users' funds and privacy safe.
 
 ## Supported versions
 
-Corvin is pre-1.0 (currently `1.0.0-rc1`). Security fixes are applied to the latest
+Corvin is pre-1.0 (currently `1.0.0-rc.2`). Security fixes are applied to the latest
 release only; always run the most recent version.
 
 | Version                               | Supported |
 | ------------------------------------- | --------- |
-| Latest release (incl. `1.0.0-rc1`)    | ✅        |
+| Latest release (incl. `1.0.0-rc.2`)   | ✅        |
 | Older / superseded pre-release builds | ❌        |
 
 ## Reporting a vulnerability

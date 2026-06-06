@@ -429,7 +429,8 @@
       "Bash(sed -n '1,8p' CHANGELOG.md)",
       "Bash(sed -n '1,7p' ~/Documents/corvin-startos/CHANGELOG.md)",
       "Bash(sed -n '780,800p' crates/server/src/state.rs)",
-      "Bash(sed -n '30,60p' crates/desktop/src/main.rs)"
+      "Bash(sed -n '30,60p' crates/desktop/src/main.rs)",
+      "Bash(just verify-release *)"
     ]
   }
 }
