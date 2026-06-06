@@ -37,6 +37,8 @@ fn main() {
             let nw_handle = handle.clone();
             let nw_host = local_host.clone();
 
+            // Used below for the Linux-only WebKitGTK setup; unused on other targets.
+            #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
             let window = WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(url))
                 .title("Corvin")
                 .inner_size(1280.0, 832.0)

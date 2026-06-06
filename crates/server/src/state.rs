@@ -781,6 +781,7 @@ pub async fn get_scripts(managed: &ManagedWallet) -> Vec<ScriptBuf> {
 }
 
 /// Restrict an existing file's permissions to owner-only (0600). Best-effort on errors.
+#[cfg_attr(not(unix), allow(unused_variables))]
 pub fn restrict_to_owner(path: &std::path::Path) {
     #[cfg(unix)]
     {

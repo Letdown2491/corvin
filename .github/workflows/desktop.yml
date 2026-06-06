@@ -29,7 +29,7 @@ jobs:
           - os: macos-latest          # Apple Silicon (arm64). Add macos-13 for Intel.
             bundles: app,dmg
           - os: windows-latest
-            bundles: msi,nsis
+            bundles: nsis             # not msi: MSI rejects non-numeric prerelease versions (rc.2)
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

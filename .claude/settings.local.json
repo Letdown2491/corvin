@@ -427,7 +427,9 @@
       "Bash(node -e 'const{ExtendedVersion}=require\\(\"@start9labs/start-sdk\"\\);ExtendedVersion.parse\\(\"1.0.0-rc.1:0\"\\);console.log\\(\"1.0.0-rc.1:0 parses OK\"\\)')",
       "Bash(sed -i \"s/version: '1\\\\.0\\\\.0-rc\\\\.1:0'/version: '1.0.0-rc.2:0'/\" startos/versions/current.ts)",
       "Bash(sed -n '1,8p' CHANGELOG.md)",
-      "Bash(sed -n '1,7p' ~/Documents/corvin-startos/CHANGELOG.md)"
+      "Bash(sed -n '1,7p' ~/Documents/corvin-startos/CHANGELOG.md)",
+      "Bash(sed -n '780,800p' crates/server/src/state.rs)",
+      "Bash(sed -n '30,60p' crates/desktop/src/main.rs)"
     ]
   }
 }
