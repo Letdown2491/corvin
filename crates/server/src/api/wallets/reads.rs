@@ -124,7 +124,15 @@ pub async fn get_utxos(
     let utxos = match &managed.inner {
         WalletInner::Hd(_) => managed.utxos_snapshot.lock().await.clone(),
         WalletInner::Address(_) => std::sync::Arc::new(vec![]),
-        WalletInner::SilentPayments(cache) => std::sync::Arc::new(cache.lock().await.utxos()),
+        WalletInner::SilentPayments(cache) => {
+            let threshold = state
+                .config
+                .read()
+                .await
+                .sp_dust_threshold_sats
+                .unwrap_or(crate::config::DEFAULT_SP_DUST_THRESHOLD_SATS);
+            std::sync::Arc::new(cache.lock().await.utxos(threshold))
+        }
     };
     Ok(Json(utxos))
 }

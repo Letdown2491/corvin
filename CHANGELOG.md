@@ -6,6 +6,12 @@ All notable changes to Corvin are documented here. This project follows
 
 ## [Unreleased]
 
+### Added
+- Silent Payments dust-attack detection: tiny outputs sent to your reusable SP address
+  (below a 5000-sat threshold, configurable via `sp_dust_threshold_sats`) are flagged in
+  the UTXO table with a "dust attack?" badge and can be frozen in one click, so they can't
+  be spent and used to probe or link your wallet.
+
 ### Fixed
 - BIP-353 name resolution failed with "HTTP 505" over a SOCKS5/Tor proxy. The default
   DNS-over-HTTPS resolver (Quad9) is HTTP/2-only and rejects the HTTP/1.1 requests sent

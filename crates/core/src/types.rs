@@ -151,6 +151,11 @@ pub struct UtxoRecord {
     /// Non-coinbase UTXOs are always mature.
     #[serde(default = "default_true")]
     pub is_mature: bool,
+    /// True for a Silent Payments UTXO below the dust-attack threshold: a tiny
+    /// output sent to your reusable SP address to bloat or probe the wallet. The
+    /// UI flags it and suggests freezing. Always false for non-SP UTXOs.
+    #[serde(default)]
+    pub suspected_dust: bool,
 }
 
 fn default_true() -> bool {

@@ -23,6 +23,10 @@ use std::time::Duration;
 /// Per-message read cap for the SP-server socket. Comfortably above any legitimate
 /// Electrum line (a max-size tx hex is ~2 MB); bounds a hostile server's endless line.
 const MAX_LINE_BYTES: u64 = 16 * 1024 * 1024;
+/// Socket read timeout. Frigate sends keepalives roughly every 5s, so reaching this
+/// means the connection has gone silent (a stalled/dead link, often after the machine
+/// slept) and we should reconnect.
+const IDLE_READ_TIMEOUT_SECS: u64 = 300;
 
 pub struct SpScanConfig {
     /// Same URL format as the standard Electrum config: `ssl://host:port` or
@@ -98,9 +102,9 @@ impl SpScanner {
     pub fn connect(cfg: &SpScanConfig) -> Result<Self> {
         let (scheme, host, port) = parse_url(&cfg.url)?;
         let tcp = open_tcp(&host, port, cfg.socks5_proxy.as_deref())?;
-        // 5min idle timeout — Frigate's scan can be quiet for stretches but
-        // we want eventual EOF detection if the connection silently dies.
-        tcp.set_read_timeout(Some(Duration::from_secs(300)))
+        // Idle timeout: Frigate's scan can be quiet for stretches, but we want
+        // eventual detection if the connection silently dies.
+        tcp.set_read_timeout(Some(Duration::from_secs(IDLE_READ_TIMEOUT_SECS)))
             .context("set_read_timeout")?;
 
         let stream = match scheme {
@@ -322,10 +326,21 @@ impl SpScanner {
 
     fn try_read_message(&mut self) -> Result<Option<serde_json::Value>> {
         let mut buf = String::new();
-        let n = (&mut self.stream)
-            .take(MAX_LINE_BYTES)
-            .read_line(&mut buf)
-            .context("read_line")?;
+        let n = match (&mut self.stream).take(MAX_LINE_BYTES).read_line(&mut buf) {
+            Ok(n) => n,
+            // A read timeout (no data, not even a keepalive, within IDLE_READ_TIMEOUT_SECS)
+            // means the connection silently died. Surface it as a recognizable, benign
+            // reconnect signal rather than a raw OS error (os error 11 / WouldBlock).
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                anyhow::bail!("idle timeout: no data from the SP server in {IDLE_READ_TIMEOUT_SECS}s");
+            }
+            Err(e) => return Err(anyhow::Error::new(e).context("read_line")),
+        };
         if n == 0 {
             return Ok(None);
         }

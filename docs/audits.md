@@ -91,6 +91,33 @@ The standout cluster was "a corrupt file leads to silent data loss." Fixed:
   multisig combine, sweep, BIP-322, broadcast decode, payjoin persistence and
   anti-replay).
 
+## 2026-06-06: rc.3 delta + at-rest boundary re-sweep
+
+A focused pass over the changes since rc.2 (Cloudflare DoH default + migration, per-wallet
+SP scanner status, the Electrum subscriber skipping SP wallets, the BitBox at-rest pairing
+fix, SP dust-attack detection, the SP idle-timeout handling), plus a systematic re-check of
+the at-rest boundary prompted by the BitBox finding. No material findings.
+
+- **At-rest boundary is clean.** Enumerated every raw filesystem read/write in the crates:
+  each one is either the migration mechanism itself, the deliberately-plaintext `vault.json`
+  sentinel, a user-provided file (a CA cert), a user export (the desktop save dialog), or a
+  test. No Corvin store reaches disk outside `write_private`/`read_private` anymore. The
+  BitBox `bitbox.json` (bitbox-api writing its Noise pairing as plaintext) was the only
+  instance of that pattern and is now routed through the at-rest layer.
+- **BitBox `CorvinNoiseConfig` reviewed.** Its "fall back to a fresh config (re-pair) on any
+  read/unseal failure" path can't be abused for a silent MITM: re-pairing still requires the
+  device's physical trust-on-first-use confirmation, so a forced re-pair surfaces to the user.
+- **New SP status endpoint** (`/sp/status`) exposes only `wallet_id`/`connected`/`error`,
+  same shape and localhost-only surface as the existing `/backends/status`; no new exposure.
+- **Tooling baseline green:** `cargo audit` 0 vulnerabilities (only the known unmaintained
+  GTK-binding warnings from the Tauri desktop stack, not linked headless), `npm audit` 0,
+  clippy clean (headless config), Rust + Vitest suites pass, and the descriptor/address
+  fuzz targets ran clean (~0.8M and ~1.6M execs, no crashes).
+- **Noted, not a regression:** an SP wallet records every received output, so a flood of
+  dust receipts grows `sp_outputs.json` unboundedly. The new dust detection surfaces and
+  freezes such outputs but doesn't cap storage; this is inherent to scanning-based SP
+  receive (Sparrow has the same shape) and predates rc.3.
+
 ## Still open, by nature rather than as defects
 
 - Payjoin live negotiation needs a real relay, directory, and counterparty, so it

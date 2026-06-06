@@ -119,8 +119,19 @@
     if (!feeRates) return false
     return u.amount_sats < inputVbytes(u.address) * feeRates.hourFee
   }
+  // Server-flagged Silent Payments dust-attack output: a tiny payment to your reusable
+  // SP address, used to probe or link your wallet. A privacy signal, distinct from the
+  // fee-based economic dust above.
+  function isDustAttack(u: UtxoRecord): boolean {
+    return u.suspected_dust
+  }
+  function isFreezeableDust(u: UtxoRecord): boolean {
+    return isDust(u) || isDustAttack(u)
+  }
 
-  let dustCount = $derived(feeRates ? utxos.filter(u => isDust(u)).length : 0)
+  let economicDustCount = $derived(feeRates ? utxos.filter(u => isDust(u)).length : 0)
+  let attackDustCount = $derived(utxos.filter(u => isDustAttack(u)).length)
+  let dustCount = $derived(utxos.filter(u => isFreezeableDust(u)).length)
   let showNudge = $derived(utxos.length >= 10 || dustCount > 0)
 
   // ── Shared address detection ──────────────────────────────────────────────
@@ -240,7 +251,7 @@
   let bulkFreezing = $state(false)
   async function bulkFreezeDust() {
     if (bulkFreezing) return
-    const dustOnes = utxos.filter(u => isDust(u) && !$frozenUtxos.has(utxoKey(u.txid, u.vout)))
+    const dustOnes = utxos.filter(u => isFreezeableDust(u) && !$frozenUtxos.has(utxoKey(u.txid, u.vout)))
     if (dustOnes.length === 0) return
     bulkFreezing = true
     try {
@@ -294,8 +305,10 @@
   {#if !consolidateMode && showNudge}
     <div class="nudge">
       <div class="nudge-text">
-        {#if dustCount > 0}
-          {dustCount} UTXO{dustCount !== 1 ? 's are' : ' is'} dust — worth less than the fee to spend at current rates.{utxos.length >= 10 ? ` You have ${utxos.length} UTXOs total.` : ''}
+        {#if attackDustCount > 0}
+          {attackDustCount} UTXO{attackDustCount !== 1 ? 's' : ''} may be a dust attack: a tiny output sent to your Silent Payments address to probe or link your wallet. Consider freezing.{economicDustCount > 0 ? ` (${economicDustCount} more cost more in fees than they're worth.)` : ''}
+        {:else if dustCount > 0}
+          {dustCount} UTXO{dustCount !== 1 ? 's are' : ' is'} dust: worth less than the fee to spend at current rates.{utxos.length >= 10 ? ` You have ${utxos.length} UTXOs total.` : ''}
         {:else}
           {utxos.length} UTXOs — consider consolidating when fees are low to reduce future costs.
         {/if}
@@ -352,6 +365,7 @@
         {@const outpoint  = utxoKey(utxo.txid, utxo.vout)}
         {@const frozen    = $frozenUtxos.has(outpoint)}
         {@const dust      = isDust(utxo)}
+        {@const dustAttack = utxo.suspected_dust}
         {@const label     = $utxoLabels[outpoint] ?? addressLabels[utxo.address ?? ''] ?? ''}
         {@const isSelected = selected.has(outpoint)}
         {@const stype     = scriptType(utxo.address)}
@@ -363,7 +377,7 @@
         {@const catInherited = !$utxoCategories[outpoint] && !!catId}
         <tr
           class:is-frozen={frozen}
-          class:is-dust={dust && !frozen}
+          class:is-dust={(dust || dustAttack) && !frozen}
           class:is-selected={consolidateMode && isSelected}
           class:is-unconfirmed={unconf}
           class:is-immature={immature}
@@ -412,8 +426,10 @@
                 {#if shared}
                   <span class="sflag sflag-reuse" title="Address reuse — spending multiple UTXOs from this address links them on-chain">reuse</span>
                 {/if}
-                {#if dust}
-                  <span class="sflag sflag-dust" title="Dust — costs more in fees to spend than its current value at this fee rate">dust</span>
+                {#if dustAttack}
+                  <span class="sflag sflag-dust" title="Tiny output sent to your Silent Payments address: a possible dust attack to probe or link your wallet. Consider freezing.">dust attack?</span>
+                {:else if dust}
+                  <span class="sflag sflag-dust" title="Dust: costs more in fees to spend than its current value at this fee rate">dust</span>
                 {/if}
               </div>
               <div class="outpoint-row">

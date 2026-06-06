@@ -9,4 +9,10 @@ is_coinbase: boolean,
  * False only for coinbase outputs with fewer than 100 confirmations.
  * Non-coinbase UTXOs are always mature.
  */
-is_mature: boolean, };
+is_mature: boolean, 
+/**
+ * True for a Silent Payments UTXO below the dust-attack threshold: a tiny
+ * output sent to your reusable SP address to bloat or probe the wallet. The
+ * UI flags it and suggests freezing. Always false for non-SP UTXOs.
+ */
+suspected_dust: boolean, };

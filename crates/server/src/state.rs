@@ -110,7 +110,7 @@ impl SilentPaymentsCache {
             .collect()
     }
 
-    pub fn utxos(&self) -> Vec<UtxoRecord> {
+    pub fn utxos(&self, dust_threshold: u64) -> Vec<UtxoRecord> {
         self.outputs
             .iter()
             .filter(|o| !o.spent)
@@ -129,6 +129,7 @@ impl SilentPaymentsCache {
                     block_height: if o.height == 0 { None } else { Some(o.height) },
                     is_coinbase: false,
                     is_mature: true,
+                    suspected_dust: o.value_sats < dust_threshold,
                 }
             })
             .collect()

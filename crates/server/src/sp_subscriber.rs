@@ -225,12 +225,19 @@ async fn run_one(state: AppState, wallet_id: Uuid, keys: crate::api::silent_paym
                     );
                     return;
                 }
-                state.sp_disconnected(wallet_id, Some(msg.clone()));
-                tracing::warn!(
-                    wallet = %wallet_id,
-                    error = %msg,
-                    "SP scanner: session error",
-                );
+                if msg.contains("idle timeout") {
+                    // Expected: the connection went quiet and we'll reconnect. Show a
+                    // friendly status and log it softly, not as an alarming error.
+                    state.sp_disconnected(wallet_id, Some("connection idle, reconnecting".to_string()));
+                    tracing::info!(wallet = %wallet_id, "SP scanner: connection idle, reconnecting");
+                } else {
+                    state.sp_disconnected(wallet_id, Some(msg.clone()));
+                    tracing::warn!(
+                        wallet = %wallet_id,
+                        error = %msg,
+                        "SP scanner: session error",
+                    );
+                }
             }
             Err(join_err) => {
                 state.sp_disconnected(wallet_id, Some("scanner task crashed".to_string()));

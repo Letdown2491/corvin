@@ -207,6 +207,7 @@ pub fn get_utxos(wallet: &Wallet) -> Vec<UtxoRecord> {
                 block_height,
                 is_coinbase,
                 is_mature,
+                suspected_dust: false,
             }
         })
         .collect()

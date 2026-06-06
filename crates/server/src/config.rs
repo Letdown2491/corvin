@@ -34,6 +34,11 @@ fn default_bip353_doh_url() -> String {
 fn default_poll_interval_secs() -> u64 {
     300
 }
+/// Default Silent Payments dust-attack threshold (sats). Received SP UTXOs below
+/// this are flagged as suspected dust. Higher than the on-chain dust limit because
+/// SP outputs are P2TR and the privacy stakes of spending an attacker's dust are
+/// higher. Matches Sparrow's default.
+pub const DEFAULT_SP_DUST_THRESHOLD_SATS: u64 = 5000;
 fn default_show_price_data() -> bool {
     false
 }
@@ -320,6 +325,11 @@ pub struct Config {
     /// default be one of your saved servers without copying its secrets around.
     #[serde(default)]
     pub default_backend: Option<String>,
+    /// Silent Payments dust-attack threshold in sats. Received SP UTXOs below this
+    /// are flagged as suspected dust in the UI. `None` uses
+    /// `DEFAULT_SP_DUST_THRESHOLD_SATS`; set a value to override.
+    #[serde(default)]
+    pub sp_dust_threshold_sats: Option<u64>,
     /// Set once the first-run onboarding wizard has been completed or skipped.
     /// The frontend shows the wizard only when this is false and no wallets exist.
     /// Preserved across settings saves (the settings form doesn't carry it).
