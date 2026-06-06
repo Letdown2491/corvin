@@ -46,6 +46,15 @@ export interface BackendStatusEntry {
   error?: string | null
 }
 
+/// Live Frigate-scanner connection state for one SP wallet (from GET /sp/status).
+/// SP wallets talk only to their SP backend, so they're tracked per wallet id, not
+/// keyed by the Electrum backend like BackendStatusEntry.
+export interface SpStatusEntry {
+  wallet_id: string
+  connected: boolean
+  error?: string | null
+}
+
 export interface FeeBumpResult {
   psbt: string
   fee_sats: number

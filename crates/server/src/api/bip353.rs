@@ -19,10 +19,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::api::ApiError;
 use crate::state::AppState;
 
-/// Default RFC 8484 DoH endpoint when none is configured. Transport only —
-/// DNSSEC validation makes it untrusted, and requests go through the socks5
-/// proxy when one is set. Overridable via `backend.bip353_doh_url`.
-const DEFAULT_DOH_URL: &str = "https://dns.quad9.net/dns-query";
+/// Default RFC 8484 DoH endpoint when none is configured. Transport only (DNSSEC
+/// validation makes it untrusted), and requests go through the socks5 proxy when one
+/// is set. Cloudflare because it also speaks HTTP/1.1; Quad9 is HTTP/2-only and 505s
+/// when reqwest falls back to HTTP/1.1 through a proxy. Overridable via
+/// `backend.bip353_doh_url`.
+const DEFAULT_DOH_URL: &str = "https://cloudflare-dns.com/dns-query";
 
 #[derive(Deserialize)]
 pub struct ResolveNameRequest {

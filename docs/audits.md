@@ -49,8 +49,8 @@ on-chain, and at-rest planes.
 - Verified: all network egress honors the SOCKS5 proxy, the browser makes no direct
   external calls, and price, payjoin, and fiat display are off by default.
 - Fixed the whole-wallet consolidation leak (above) and the SP-scanner-survives-
-  deletion leak, and made the BIP-353 DoH resolver configurable (defaulting to Quad9)
-  and disclosed at use.
+  deletion leak, and made the BIP-353 DoH resolver configurable (defaulting to a public
+  resolver) and disclosed at use.
 - Added input-side privacy warnings to the SP-send path and a change-script-mismatch
   warning to the send path.
 - At-rest encryption, shipped separately, closes the largest on-disk gap for anyone

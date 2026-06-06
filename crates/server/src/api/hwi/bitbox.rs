@@ -8,9 +8,11 @@
 use axum::response::sse::Event;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use bdk_wallet::bitcoin::psbt::Psbt;
-use bitbox_api::{pb, runtime::TokioRuntime, BitBox, Keypath, PersistedNoiseConfig};
+use bitbox_api::{
+    pb, runtime::TokioRuntime, BitBox, ConfigError, Keypath, NoiseConfig, NoiseConfigData, Threading,
+};
 use std::convert::Infallible;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
 
 use super::common::{
@@ -32,6 +34,35 @@ async fn send(tx: &EventTx, event: &str, data: serde_json::Value) -> Result<(), 
     tx.send(Ok(Event::default().event(event).data(data.to_string())))
         .await
         .map_err(|_| ())
+}
+
+/// BitBox Noise pairing store routed through Corvin's at-rest layer. The default
+/// `PersistedNoiseConfig` reads/writes `bitbox.json` as plaintext, which breaks once
+/// at-rest encryption seals it (bitbox-api then reads an encrypted blob and fails with
+/// "stream did not contain valid UTF-8"). Going through `read_private`/`write_private`
+/// keeps the pairing sealed when encryption is on and plain when it's off, and transparently
+/// recovers an already-sealed `bitbox.json`.
+struct CorvinNoiseConfig {
+    path: PathBuf,
+}
+
+impl Threading for CorvinNoiseConfig {}
+
+impl NoiseConfig for CorvinNoiseConfig {
+    fn read_config(&self) -> Result<NoiseConfigData, ConfigError> {
+        // Any read/unseal/parse failure falls back to a fresh config (re-pair) rather than
+        // failing the connection. The pairing file is non-critical and regenerable, and this
+        // avoids bricking the device on a damaged or otherwise-unreadable bitbox.json.
+        match crate::state::read_private(&self.path) {
+            Ok(Some(bytes)) => Ok(serde_json::from_slice(&bytes).unwrap_or_default()),
+            _ => Ok(NoiseConfigData::default()),
+        }
+    }
+
+    fn store_config(&self, conf: &NoiseConfigData) -> Result<(), ConfigError> {
+        let bytes = serde_json::to_vec(conf).map_err(|e| ConfigError(e.to_string()))?;
+        crate::state::write_private(&self.path, &bytes).map_err(|e| ConfigError(e.to_string()))
+    }
 }
 
 /// Connect to the BitBox over USB and complete the Noise pairing dance.
@@ -65,8 +96,9 @@ async fn connect_and_pair(
         }
     };
 
-    let config_dir_str = config_dir.to_string_lossy().into_owned();
-    let noise_config = Box::new(PersistedNoiseConfig::new(&config_dir_str));
+    let noise_config = Box::new(CorvinNoiseConfig {
+        path: config_dir.join("bitbox.json"),
+    });
     let bitbox = match BitBox::<TokioRuntime>::from_hid_device(hid_device, noise_config).await {
         Ok(b) => b,
         Err(e) => {

@@ -24,8 +24,12 @@ fn default_rpc_url() -> String {
 fn default_mempool_url() -> String {
     "https://mempool.space".to_string()
 }
+// Cloudflare (not Quad9): Quad9's DoH endpoint is HTTP/2-only and returns HTTP 505
+// when reqwest falls back to HTTP/1.1, which it does through a SOCKS5/Tor proxy. So
+// the privacy-optimal resolver silently broke BIP-353 for exactly the Tor users. This
+// one speaks HTTP/1.1 too; DNSSEC still makes the answer unforgeable.
 fn default_bip353_doh_url() -> String {
-    "https://dns.quad9.net/dns-query".to_string()
+    "https://cloudflare-dns.com/dns-query".to_string()
 }
 fn default_poll_interval_secs() -> u64 {
     300
@@ -99,7 +103,7 @@ pub struct BackendConfig {
     /// DNSSEC makes the answer unforgeable, but whichever resolver this points at
     /// still *sees* the name being resolved (i.e. who you're about to pay), even
     /// over Tor. Configurable so privacy-conscious users can pick a resolver they
-    /// trust instead of the `dns.quad9.net` default.
+    /// trust instead of the `cloudflare-dns.com` default.
     #[serde(default = "default_bip353_doh_url")]
     pub bip353_doh_url: String,
     #[serde(default = "default_poll_interval_secs")]
@@ -188,7 +192,7 @@ impl Default for BackendConfig {
             rpc_pass: String::new(),
             mempool_url: "https://mempool.space".to_string(),
             mempool_danger_accept_invalid_certs: false,
-            bip353_doh_url: "https://dns.quad9.net/dns-query".to_string(),
+            bip353_doh_url: default_bip353_doh_url(),
             poll_interval_secs: 300,
             show_price_data: false,
             show_current_price: false,
@@ -549,6 +553,17 @@ fn seed_mempool_from_env(config: &mut Config) {
     }
 }
 
+// Existing installs persisted the old Quad9 default, which is HTTP/2-only and 505s over a
+// SOCKS5/Tor proxy (breaking BIP-353). Migrate anyone still on that exact value to the new
+// h1.1-compatible default. Returns true if it changed something (so the caller re-saves).
+fn migrate_bip353_doh(config: &mut Config) -> bool {
+    if config.backend.bip353_doh_url == "https://dns.quad9.net/dns-query" {
+        config.backend.bip353_doh_url = default_bip353_doh_url();
+        return true;
+    }
+    false
+}
+
 // Point CORVIN_CONFIG_DIR at one throwaway temp dir for the whole test binary.
 // A single OnceLock means every test (across modules) shares that dir, so the
 // env var is never racily reassigned; tests must touch disjoint files.
@@ -649,9 +664,10 @@ pub fn load_config() -> Result<Config> {
     let mempool_before = config.backend.mempool_url.clone();
     seed_mempool_from_env(&mut config);
     let mempool_changed = config.backend.mempool_url != mempool_before;
+    let doh_migrated = migrate_bip353_doh(&mut config);
     // The SP reframe removed `sp_use_main_electrum`; serde ignores the unknown key
     // but it lingers in the file. Re-save once to strip it (best-effort).
-    if raw.contains("sp_use_main_electrum") || mempool_changed {
+    if raw.contains("sp_use_main_electrum") || mempool_changed || doh_migrated {
         let _ = save_config(&config);
     }
     Ok(config)

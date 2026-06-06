@@ -4,6 +4,27 @@ All notable changes to Corvin are documented here. This project follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- BIP-353 name resolution failed with "HTTP 505" over a SOCKS5/Tor proxy. The default
+  DNS-over-HTTPS resolver (Quad9) is HTTP/2-only and rejects the HTTP/1.1 requests sent
+  through a proxy. The default is now an HTTP/1.1-compatible resolver, and installs still
+  on the old default are migrated automatically.
+- Silent Payments wallets showed the default Electrum backend's name and connection state
+  ("Default backend", and a false "can't reach" warning) instead of their Frigate
+  scanner's. The scanner's connection is now tracked per wallet and shown correctly
+  (e.g. "Public Frigate"), with no spurious connectivity warnings.
+- The Electrum subscriber spawned a needless worker for Silent Payments wallets, connecting
+  to (and retrying) a server they never use (e.g. the default backend in an SP-only-on-default
+  setup). SP wallets are now skipped by the Electrum subscriber entirely; only their Frigate
+  scanner connects.
+- BitBox hardware-wallet unlock failed ("noise config error: stream did not contain valid
+  UTF-8") when at-rest encryption was enabled: the device pairing file (`bitbox.json`) was
+  sealed by the encryption migration, but bitbox-api read it as plaintext. The pairing now
+  goes through Corvin's at-rest layer, so it stays sealed when encryption is on, plain when
+  it's off, and an already-sealed `bitbox.json` is recovered automatically (no re-pairing).
+
 ## [1.0.0-rc.2] - 2026-06-05
 
 > **This is a pre-release.** Test with small amounts first and keep a secure backup

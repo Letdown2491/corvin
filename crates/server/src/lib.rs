@@ -392,6 +392,7 @@ fn build_router(app_state: state::AppState) -> Router {
             get(backends::list_backends).post(backends::create_backend),
         )
         .route("/backends/status", get(backends::list_backend_status))
+        .route("/sp/status", get(silent_payments::list_sp_status))
         .route("/backends/test", post(backends::test_backend))
         .route("/backends/adopt-default", post(backends::adopt_default))
         .route(

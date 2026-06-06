@@ -4,7 +4,7 @@
   import { page } from '$app/stores'
   import type { BackendStatusEntry, WalletEntry } from '../lib/types'
   import { activeWalletId, syncing } from '../stores/wallets'
-  import { defaultWalletId, nodeStatus, nodeStatusAt, feeRates, feeRatesAt, backendStatuses, showCurrentPrice, currentBtcPrice, offline } from '../stores/settings'
+  import { defaultWalletId, nodeStatus, nodeStatusAt, feeRates, feeRatesAt, backendStatuses, spStatuses, showCurrentPrice, currentBtcPrice, offline } from '../stores/settings'
   import { api } from '../lib/api'
   import { kindLabel } from '../lib/utils'
 
@@ -22,6 +22,9 @@
     } catch { /* keep last-known */ }
     try {
       backendStatuses.set(await api.backends.status())
+    } catch { /* keep last-known */ }
+    try {
+      spStatuses.set(await api.silentPayments.status())
     } catch { /* keep last-known */ }
   }
 
@@ -85,6 +88,12 @@
     return m
   })
   function walletConn(w: WalletEntry): BackendStatusEntry | undefined {
+    // SP wallets sync via their Frigate scanner, not the Electrum backend, so their
+    // status is keyed by wallet id in spStatuses (not by w.backend).
+    if (w.kind === 'silent_payments') {
+      const sp = $spStatuses.find(s => s.wallet_id === w.id)
+      return sp ? { backend: null, connected: sp.connected, tip_height: null, error: sp.error } : undefined
+    }
     return statusByKey.get(w.backend ?? '')
   }
   function connTitle(st: BackendStatusEntry | undefined): string {

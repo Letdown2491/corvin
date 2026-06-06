@@ -499,3 +499,26 @@ fn hex_encode(bytes: &[u8]) -> String {
     }
     out
 }
+
+#[derive(Serialize)]
+pub struct SpStatusEntry {
+    pub wallet_id: Uuid,
+    pub connected: bool,
+    pub error: Option<String>,
+}
+
+/// Live Frigate-scanner connection state per SP wallet, for a per-wallet indicator.
+/// SP wallets always talk to their SP (Frigate) backend, never the Electrum default,
+/// so their status is tracked separately from `GET /backends/status`.
+pub async fn list_sp_status(State(state): State<AppState>) -> Json<Vec<SpStatusEntry>> {
+    let m = state.sp_status.read().unwrap_or_else(|e| e.into_inner());
+    Json(
+        m.iter()
+            .map(|(id, v)| SpStatusEntry {
+                wallet_id: *id,
+                connected: v.connected,
+                error: v.error.clone(),
+            })
+            .collect(),
+    )
+}

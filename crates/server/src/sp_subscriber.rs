@@ -74,6 +74,12 @@ async fn run_one(state: AppState, wallet_id: Uuid, keys: crate::api::silent_paym
         state.config.read().await.network.kind.to_bitcoin_network()
     );
     if configured_network != key_network {
+        state.sp_disconnected(
+            wallet_id,
+            Some(format!(
+                "wallet keys are for {key_network}, but Corvin is on {configured_network}"
+            )),
+        );
         tracing::warn!(
             wallet = %wallet_id,
             stored = %key_network,
@@ -146,6 +152,7 @@ async fn run_one(state: AppState, wallet_id: Uuid, keys: crate::api::silent_paym
                 start_height = initial.start_height,
                 "SP scanner: subscribed",
             );
+            state_clone.sp_connected(wallet_id);
             loop {
                 match scanner.next_notification()? {
                     Some(n) => {
@@ -206,6 +213,10 @@ async fn run_one(state: AppState, wallet_id: Uuid, keys: crate::api::silent_paym
                 // spamming logs. User has to switch SP server in Settings
                 // and restart Corvin to retry.
                 if msg.contains("-32601") || msg.contains("Unsupported request") {
+                    state.sp_disconnected(
+                        wallet_id,
+                        Some("server doesn't support Silent Payments (BIP-352)".to_string()),
+                    );
                     tracing::warn!(
                         wallet = %wallet_id,
                         "SP scanner: configured Electrum server doesn't support BIP-352. \
@@ -214,6 +225,7 @@ async fn run_one(state: AppState, wallet_id: Uuid, keys: crate::api::silent_paym
                     );
                     return;
                 }
+                state.sp_disconnected(wallet_id, Some(msg.clone()));
                 tracing::warn!(
                     wallet = %wallet_id,
                     error = %msg,
@@ -221,6 +233,7 @@ async fn run_one(state: AppState, wallet_id: Uuid, keys: crate::api::silent_paym
                 );
             }
             Err(join_err) => {
+                state.sp_disconnected(wallet_id, Some("scanner task crashed".to_string()));
                 tracing::error!(
                     wallet = %wallet_id,
                     error = %join_err,

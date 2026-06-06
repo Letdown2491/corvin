@@ -628,6 +628,12 @@ pub struct AppState {
     /// read by `GET /backends/status`. Keyed by `Option<backend id>` (`None` =
     /// default backend). A plain std lock — workers update it from blocking code.
     pub backend_status: Arc<std::sync::RwLock<HashMap<Option<String>, BackendStatus>>>,
+    /// Live SP-scanner connection state, written by the per-wallet sp_subscriber
+    /// tasks and read by `GET /sp/status`. Keyed by wallet id (one scanner per SP
+    /// wallet). Separate from `backend_status` because an SP wallet's `None` backend
+    /// means "public Frigate", not the default Electrum, so the two keyspaces can't
+    /// share a map.
+    pub sp_status: Arc<std::sync::RwLock<HashMap<Uuid, BackendStatus>>>,
     /// When booting locked (at-rest encryption on), services aren't started until
     /// unlock. The subscriber's command receiver waits here and is taken once by
     /// the post-unlock startup. `None` after a normal plaintext boot (the
@@ -695,6 +701,7 @@ impl AppState {
             sp_scanners: Arc::new(Mutex::new(HashMap::new())),
             payjoin_tasks: Arc::new(Mutex::new(HashMap::new())),
             backend_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            sp_status: Arc::new(std::sync::RwLock::new(HashMap::new())),
             startup_rx: Arc::new(Mutex::new(None)),
         };
         (state, sub_rx)
@@ -726,6 +733,30 @@ impl AppState {
         let e = m.entry(key.map(str::to_string)).or_default();
         e.connected = false;
         e.error = error;
+    }
+
+    /// Mark an SP wallet's Frigate scanner connected. Called by its sp_subscriber task.
+    pub fn sp_connected(&self, wallet_id: Uuid) {
+        let mut m = self.sp_status.write().unwrap_or_else(|e| e.into_inner());
+        let e = m.entry(wallet_id).or_default();
+        e.connected = true;
+        e.error = None;
+    }
+
+    /// Mark an SP wallet's scanner disconnected with an optional error message.
+    pub fn sp_disconnected(&self, wallet_id: Uuid, error: Option<String>) {
+        let mut m = self.sp_status.write().unwrap_or_else(|e| e.into_inner());
+        let e = m.entry(wallet_id).or_default();
+        e.connected = false;
+        e.error = error;
+    }
+
+    /// Drop an SP wallet's scanner status (on wallet delete).
+    pub fn sp_status_remove(&self, wallet_id: Uuid) {
+        self.sp_status
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&wallet_id);
     }
 }
 

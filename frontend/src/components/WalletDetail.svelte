@@ -5,7 +5,7 @@
   import type { AddressInfo, Balance, BalancePoint, BackendEntry, TxRecord, UtxoRecord, WalletEntry } from '../lib/types'
   import { syncing, lastSyncComplete, walletBalances, wallets, markWalletSynced, unmarkWalletSynced, hasWalletSyncedThisSession } from '../stores/wallets'
   import { goto } from '$app/navigation'
-  import { displayUnit, balancesHidden, showFiatBalance, currentBtcPrice, mempoolUrl, feeRates as feeRatesStore, backendStatuses, offline } from '../stores/settings'
+  import { displayUnit, balancesHidden, showFiatBalance, currentBtcPrice, mempoolUrl, feeRates as feeRatesStore, backendStatuses, spStatuses, offline } from '../stores/settings'
   import { get } from 'svelte/store'
   import { labels, loadLabels } from '../stores/labels'
   import { parseQuery, filterTxs } from '../lib/search'
@@ -50,17 +50,27 @@
 
   let balance = $state<Balance | null>(null)
   let savedBackends = $state<BackendEntry[]>([])
-  // This wallet's backend connection state (from the shared per-backend status).
-  let conn = $derived($backendStatuses.find(s => (s.backend ?? null) === (wallet.backend ?? null)))
+  // This wallet's backend connection state. SP wallets sync via their Frigate scanner
+  // (keyed by wallet id in spStatuses), never the Electrum backend, so resolve them
+  // separately; map the SP entry into the same shape the chip/banner expect.
+  let conn = $derived.by(() => {
+    if (wallet.kind === 'silent_payments') {
+      const sp = $spStatuses.find(s => s.wallet_id === wallet.id)
+      return sp ? { backend: null, connected: sp.connected, tip_height: null, error: sp.error } : undefined
+    }
+    return $backendStatuses.find(s => (s.backend ?? null) === (wallet.backend ?? null))
+  })
   // Backend is unreachable (not a deliberate offline mode, not a transient sync):
   // drives the reassuring "degraded" banner. Distinct from $offline.
   let backendDown = $derived(
     !$offline && conn !== undefined && !conn.connected && !$syncing.has(wallet.id)
   )
   let serverLabel = $derived(
-    wallet.backend == null
-      ? 'Default backend'
-      : (savedBackends.find(b => b.id === wallet.backend)?.label ?? wallet.backend)
+    wallet.backend != null
+      ? (savedBackends.find(b => b.id === wallet.backend)?.label ?? wallet.backend)
+      : wallet.kind === 'silent_payments'
+        ? 'Public Frigate'
+        : 'Default backend'
   )
   // Recommended mempool fee for the status line (matches the old sidebar
   // formatting). Global/mempool value, shown in wallet context.
@@ -158,6 +168,7 @@
 
   async function refreshConn() {
     try { backendStatuses.set(await api.backends.status()) } catch { /* keep last-known */ }
+    try { spStatuses.set(await api.silentPayments.status()) } catch { /* keep last-known */ }
   }
 
   let dataGen = 0

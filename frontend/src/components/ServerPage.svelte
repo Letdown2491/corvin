@@ -533,7 +533,7 @@
             {#if flashed === 'names'}
               <span class="autosaved">Autosaved ✓</span>
             {:else if !showNames}
-              <span class="card-toggle-hint">{settings.backend.bip353_doh_url?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || 'dns.quad9.net'}</span>
+              <span class="card-toggle-hint">{settings.backend.bip353_doh_url?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') || 'cloudflare-dns.com'}</span>
             {/if}
           </button>
 
@@ -550,7 +550,7 @@
               id="s-doh"
               type="text"
               bind:value={settings.backend.bip353_doh_url}
-              placeholder="https://dns.quad9.net/dns-query"
+              placeholder="https://cloudflare-dns.com/dns-query"
               onchange={() => autosave('names')}
             />
           </div>

@@ -1,6 +1,6 @@
 import { browser } from '$app/environment'
 import { writable, derived } from 'svelte/store'
-import type { BackendStatusEntry, FeeRates, NodeStatus } from '../lib/types'
+import type { BackendStatusEntry, FeeRates, NodeStatus, SpStatusEntry } from '../lib/types'
 export type { FeeRates } from '../lib/types'
 
 export const nodeStatus = writable<NodeStatus | null>(null)
@@ -22,6 +22,11 @@ export const offline = derived(nodeStatus, ($n) => $n?.offline ?? false)
 /// Drives the per-wallet connection dot in the sidebar and the wallet page.
 export const backendStatuses = writable<BackendStatusEntry[]>([])
 export const backendStatusesAt = writable<number>(0)
+
+/// Live SP Frigate-scanner connection state, keyed by wallet id. SP wallets talk
+/// only to their SP backend, so their status is tracked separately from the Electrum
+/// backendStatuses above. Drives the per-wallet indicator for SP wallets.
+export const spStatuses = writable<SpStatusEntry[]>([])
 
 export const feeRates = writable<FeeRates | null>(null)
 export const feeRatesAt = writable<number>(0)

@@ -430,7 +430,12 @@
       "Bash(sed -n '1,7p' ~/Documents/corvin-startos/CHANGELOG.md)",
       "Bash(sed -n '780,800p' crates/server/src/state.rs)",
       "Bash(sed -n '30,60p' crates/desktop/src/main.rs)",
-      "Bash(just verify-release *)"
+      "Bash(just verify-release *)",
+      "Bash(sed -n '18,30p' frontend/src/components/WalletSidebar.svelte)",
+      "Bash(sed -n '50,64p' frontend/src/components/WalletDetail.svelte)",
+      "Bash(just bump-version *)",
+      "Bash(sed -n '143,155p' crates/server/src/lib.rs)",
+      "Bash(sed -n '215,223p' crates/server/src/api/backup.rs)"
     ]
   }
 }

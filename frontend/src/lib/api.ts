@@ -1,4 +1,4 @@
-import type { AddressInfo, BackendEntry, BackendStatusEntry, Balance, BalancePoint, Category, CategoryData, CombineResult, ConsolidateResult, DecodedTx, FeeBumpResult, FeeRates, MempoolBlock, MultisigDetails, NodeStatus, PayjoinBuildResult, PayjoinReceiveProvision, PayjoinStatus, PayjoinStatusKind, PolicyInfo, SecurityStatus, SendResult, Settings, SpSpendResult, SweepResult, SyncResult, TaxRecord, TxBreakdown, TxRecord, UtxoRecord, WalletEntry } from './types'
+import type { AddressInfo, BackendEntry, BackendStatusEntry, Balance, BalancePoint, Category, CategoryData, CombineResult, ConsolidateResult, DecodedTx, FeeBumpResult, FeeRates, MempoolBlock, MultisigDetails, NodeStatus, PayjoinBuildResult, PayjoinReceiveProvision, PayjoinStatus, PayjoinStatusKind, PolicyInfo, SecurityStatus, SendResult, Settings, SpSpendResult, SpStatusEntry, SweepResult, SyncResult, TaxRecord, TxBreakdown, TxRecord, UtxoRecord, WalletEntry } from './types'
 import { serverReachable } from '../stores/server'
 
 const BASE = '/api'
@@ -320,6 +320,8 @@ export const api = {
       | { label: string; source: 'from_seed'; mnemonic: string; passphrase?: string; account_index?: number; birthday_height?: number | null; backend?: string | null }
       | { label: string; source: 'watch_only'; scan_secret_hex: string; spend_pubkey_hex: string; birthday_height?: number | null; backend?: string | null }
     ) => req<WalletEntry>('POST', '/wallets/silent-payments', body),
+    /// Live Frigate-scanner connection state for every SP wallet.
+    status: () => req<SpStatusEntry[]>('GET', '/sp/status'),
   },
   resolveName: (name: string) =>
     req<{ uri: string; hrn: string }>('POST', '/resolve-name', { name }),

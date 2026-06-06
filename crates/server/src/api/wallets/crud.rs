@@ -370,6 +370,7 @@ pub async fn delete_wallet(
         if let Some(handle) = state.sp_scanners.lock().await.remove(&id) {
             handle.abort();
         }
+        state.sp_status_remove(id);
         if let Err(e) = crate::api::silent_payments::forget_wallet(id) {
             tracing::warn!("Couldn't clear silent-payment keys for {id}: {e}");
         }

@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::api::wallets::background_sync;
 use crate::config::BackendType;
-use crate::state::{AppState, SubCommand};
+use crate::state::{AppState, SubCommand, WalletInner};
 
 /// Supervisor: route each wallet's commands to a worker dedicated to that
 /// wallet's backend, so each distinct backend gets its own connection. Wallets
@@ -24,6 +24,13 @@ pub fn spawn_subscriber(state: AppState, cmd_rx: mpsc::UnboundedReceiver<SubComm
             match &cmd {
                 SubCommand::AddWallet { id, .. } | SubCommand::UpdateScripts { id, .. } => {
                     let id = *id;
+                    // SP wallets are scanned by sp_subscriber against their Frigate
+                    // backend, never via this Electrum subscriber. Ignore them here, or
+                    // we'd spawn a spurious Electrum worker for their backend group (e.g.
+                    // the default), connecting to a server the wallet never uses.
+                    if is_sp_wallet(&state, id).await {
+                        continue;
+                    }
                     let key = resolve_group_key(&state, id).await;
                     // If the wallet changed backends, drop it from its old group.
                     if let Some(prev) = wallet_group.get(&id) {
@@ -56,6 +63,15 @@ pub fn spawn_subscriber(state: AppState, cmd_rx: mpsc::UnboundedReceiver<SubComm
             }
         }
     });
+}
+
+/// SP wallets are handled by sp_subscriber (Frigate), not this Electrum subscriber.
+async fn is_sp_wallet(state: &AppState, id: Uuid) -> bool {
+    let mgr = state.manager.read().await;
+    match mgr.get(&id) {
+        Some(m) => matches!(m.inner, WalletInner::SilentPayments(_)),
+        None => false,
+    }
 }
 
 /// The backend group a wallet belongs to: its pinned backend id if that id is a
